@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Wisp — chat</title>
+<title>Wisp - chat</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -421,7 +421,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 
 <script>
 /* ================= Firebase init ================= */
@@ -437,8 +436,22 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
-const storage = firebase.storage();
 const FieldValue = firebase.firestore.FieldValue;
+
+/* Profile picture hosting via Catbox (no Firebase Storage / Blaze plan needed) */
+async function uploadToCatbox(file){
+  if(file.size > 6 * 1024 * 1024){
+    throw new Error('Image is too large — please choose one under 6MB.');
+  }
+  const form = new FormData();
+  form.append('reqtype', 'fileupload');
+  form.append('fileToUpload', file);
+  const res = await fetch('https://catbox.moe/user/api.php', { method: 'POST', body: form });
+  if(!res.ok) throw new Error('Catbox upload failed (' + res.status + ')');
+  const text = (await res.text()).trim();
+  if(!text.startsWith('http')) throw new Error('Catbox upload failed: ' + text);
+  return text;
+}
 
 /* ================= Helpers ================= */
 const $ = (id) => document.getElementById(id);
@@ -509,16 +522,28 @@ auth.onAuthStateChanged(async (user) => {
   }
   currentUser = user;
   hide($('auth-screen'));
-  const snap = await db.collection('users').doc(user.uid).get();
-  if(snap.exists){
-    myDoc = snap.data();
-    hide($('setup-screen'));
-    enterApp();
-  } else {
-    $('setup-avatar-preview').src = defaultAvatar(user.uid);
-    $('setup-displayname').value = user.displayName || '';
-    $('setup-screen').style.display = 'flex';
+  try{
+    const snap = await db.collection('users').doc(user.uid).get();
+    if(snap.exists){
+      myDoc = snap.data();
+      hide($('setup-screen'));
+      enterApp();
+    } else {
+      $('setup-avatar-preview').src = defaultAvatar(user.uid);
+      $('setup-displayname').value = user.displayName || '';
+      $('setup-screen').style.display = 'flex';
+    }
+  }catch(err){
+    console.error('Post-login Firestore read failed:', err);
+    hide($('setup-screen')); hide($('app'));
+    $('auth-screen').style.display = 'flex';
+    toast('Could not load your profile: ' + err.message);
   }
+});
+
+window.addEventListener('unhandledrejection', (e) => {
+  console.error('Unhandled error:', e.reason);
+  toast((e.reason && e.reason.message) ? e.reason.message : 'Something went wrong — check the console.');
 });
 
 $('google-signin-btn').addEventListener('click', () => {
@@ -569,6 +594,13 @@ function updateSetupBtn(ok){
 }
 $('setup-displayname').addEventListener('input', () => updateSetupBtn(setupUsernameValid));
 
+function withTimeout(promise, ms, label){
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} timed out after ${ms/1000}s — check Storage/Firestore rules and network tab`)), ms))
+  ]);
+}
+
 $('setup-submit-btn').addEventListener('click', async () => {
   const btn = $('setup-submit-btn');
   btn.disabled = true; btn.textContent = 'Setting up…';
@@ -579,12 +611,13 @@ $('setup-submit-btn').addEventListener('click', async () => {
 
     let photoURL = defaultAvatar(currentUser.uid);
     if(setupAvatarFile){
-      const ref = storage.ref(`avatars/${currentUser.uid}/${Date.now()}_${setupAvatarFile.name}`);
-      await ref.put(setupAvatarFile);
-      photoURL = await ref.getDownloadURL();
+      console.log('Uploading avatar to Catbox…');
+      photoURL = await withTimeout(uploadToCatbox(setupAvatarFile), 20000, 'Avatar upload');
+      console.log('Avatar uploaded:', photoURL);
     }
 
-    await db.runTransaction(async (tx) => {
+    console.log('Writing profile…');
+    await withTimeout(db.runTransaction(async (tx) => {
       const unameRef = db.collection('usernames').doc(lower);
       const unameSnap = await tx.get(unameRef);
       if(unameSnap.exists && unameSnap.data().uid !== currentUser.uid){
@@ -598,13 +631,15 @@ $('setup-submit-btn').addEventListener('click', async () => {
         createdAt: FieldValue.serverTimestamp(),
         lastSeen: FieldValue.serverTimestamp()
       });
-    });
+    }), 15000, 'Saving profile');
+    console.log('Profile written.');
 
     const snap = await db.collection('users').doc(currentUser.uid).get();
     myDoc = snap.data();
     hide($('setup-screen'));
     enterApp();
   }catch(err){
+    console.error('Setup failed:', err);
     toast(err.message);
     btn.disabled = false; btn.textContent = 'Start chatting';
   }
@@ -943,9 +978,7 @@ $('modal-save-btn').addEventListener('click', async () => {
 
     let photoURL = myDoc.photoURL;
     if(modalAvatarFile){
-      const ref = storage.ref(`avatars/${currentUser.uid}/${Date.now()}_${modalAvatarFile.name}`);
-      await ref.put(modalAvatarFile);
-      photoURL = await ref.getDownloadURL();
+      photoURL = await withTimeout(uploadToCatbox(modalAvatarFile), 20000, 'Avatar upload');
     }
 
     if(usernameChanged){
