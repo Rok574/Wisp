@@ -72,24 +72,11 @@
   /* ---------- Auth screen ---------- */
   #auth-screen{
     position:fixed; inset:0; display:none; align-items:center; justify-content:safe center;
-    /* These blobs were hardcoded to light lavender/mint (#EDEDFC / #E8F9F1)
-       regardless of theme. In light mode that's a subtle, intentional
-       accent; in dark mode it meant two bright pastel patches sitting on
-       top of a near-black background — the "weird"-looking login screen.
-       Using the theme's own soft-accent variable keeps the same effect but
-       lets it adapt (it's a muted indigo tint in dark mode instead of a
-       jarring bright one). */
     background:
       radial-gradient(circle at 15% 20%, var(--accent-soft) 0%, transparent 45%),
       radial-gradient(circle at 85% 80%, var(--accent-soft) 0%, transparent 45%),
       var(--bg);
     z-index:90; flex-direction:column; gap:28px; padding:24px;
-    /* body has overflow:hidden globally (needed for the chat shell), which
-       meant that on a short viewport — a small phone, a landscape window,
-       or a keyboard eating half the screen — the bottom of the auth card
-       (the Google button / footnote) was silently clipped off with no way
-       to scroll to it. This screen gets its own scroll instead of
-       inheriting the app's fixed layout. */
     overflow-y:auto;
     -webkit-overflow-scrolling:touch;
   }
@@ -296,9 +283,9 @@
   .msg-row.received .bubble{background:var(--bubble-received); color:var(--ink); border-bottom-left-radius:5px;}
   .msg-row.sent .bubble.unsent{background:var(--bubble-received); color:var(--ink);}
   .msg-row + .msg-row{margin-top:2px;}
-  .msg-time{font-size:10.5px; color:var(--ink-faint); font-family:var(--font-mono); margin:3px 4px 10px;}
-  .retry-link{color:var(--danger); cursor:pointer; text-decoration:underline; margin-left:4px;}
-  .unsend-link{color:var(--ink-faint); cursor:pointer; text-decoration:underline; margin-left:4px;}
+  .msg-time{font-size:10.5px; color:var(--ink-faint); font-family:var(--font-mono); margin:3px 4px 10px; display:flex; align-items:center; gap:2px; flex-wrap:wrap;}
+  .retry-link{color:var(--danger); cursor:pointer; text-decoration:underline; margin-left:4px; padding:4px 2px; display:inline-block;}
+  .unsend-link{color:var(--ink-faint); cursor:pointer; text-decoration:underline; margin-left:4px; padding:4px 2px; display:inline-block;}
   .unsend-link:hover{color:var(--danger);}
 
   .typing-row{display:flex; align-self:flex-start; padding:6px 4px;}
@@ -649,9 +636,6 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 const FieldValue = firebase.firestore.FieldValue;
 
-// Firestore's built-in offline persistence + backoff already retries dropped
-// connections, but we surface that state to the user instead of leaving them
-// staring at a stale "No conversations yet" screen.
 db.enableNetwork().catch(() => {});
 
 /* Profile picture / message photo hosting via imgbb (no Firebase Storage / Blaze plan needed) */
@@ -675,11 +659,6 @@ async function uploadToImgbb(file){
       method: 'POST', body: form
     });
   }catch(networkErr){
-    // A fetch() that fails before even getting a response (TypeError:
-    // "Failed to fetch") almost always means the request never reached
-    // api.imgbb.com at all — the network/wifi is blocking or dropping it,
-    // rather than imgbb itself rejecting the upload. Surface that
-    // distinction so it's not confused with a bad file or an expired key.
     throw new Error("Couldn't reach the image host — your network or wifi may be blocking it. Photo uploads need access to api.imgbb.com.");
   }
   const data = await res.json().catch(() => null);
@@ -698,13 +677,6 @@ function toast(msg){
   clearTimeout(toast._t);
   toast._t = setTimeout(()=> t.classList.remove('show'), 2800);
 }
-// Generated 100% locally as an inline SVG data URI — no network request at
-// all. The old version called out to api.dicebear.com for every avatar,
-// which meant that on any wifi/firewall that blocks that host (common on
-// school/office/hotel networks), every single avatar in the app — including
-// your own default photo before you'd uploaded one — rendered as a broken
-// image icon. This picks a deterministic color from the seed and draws
-// initials, so it always renders instantly regardless of network.
 const AVATAR_PALETTE = ['#5B5FEF','#34D399','#F59E0B','#EC4899','#06B6D4','#8B5CF6','#F97316','#10B981'];
 function hashSeed(str){
   let h = 0;
@@ -722,9 +694,6 @@ function defaultAvatar(seed){
   </svg>`;
   return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
 }
-// Attach to any <img> so that if its src fails to load (a blocked host, a
-// dead imgbb link, an offline network) it swaps to the local avatar instead
-// of showing a broken-image icon forever.
 function withAvatarFallback(imgEl, seedForFallback){
   if(!imgEl) return imgEl;
   imgEl.addEventListener('error', function onErr(){
@@ -733,17 +702,10 @@ function withAvatarFallback(imgEl, seedForFallback){
   });
   return imgEl;
 }
-// Same idea but usable as an inline onerror="" attribute for images built
-// via innerHTML template strings (search results, chat list rows, group
-// picker), since those aren't real DOM nodes at creation time.
 window.__avatarFallback = function(imgEl){
-  imgEl.onerror = null; // prevent loops if the fallback itself somehow fails
+  imgEl.onerror = null;
   imgEl.src = defaultAvatar(imgEl.dataset.seed || imgEl.alt || 'user');
 };
-// Message photos (imgbb-hosted, sent by the other person) aren't avatars —
-// swapping to a colored initial circle would be confusing there. Instead
-// show a plain "photo unavailable" placeholder so a blocked/broken image
-// host doesn't leave a stretched broken-image icon in the message bubble.
 window.__photoFallback = function(imgEl){
   imgEl.onerror = null;
   imgEl.style.display = 'none';
@@ -796,10 +758,10 @@ function withTimeout(promise, ms, label){
 /* ================= State ================= */
 let currentUser = null;
 let myDoc = null;
-let userCache = new Map();       // uid -> user data
+let userCache = new Map();
 let activeChatId = null;
-let activeChat = null;           // {id,isGroup,name,avatar,members,partnerUid}
-let activePartner = null;        // {uid,...} for 1:1 chats
+let activeChat = null;
+let activePartner = null;
 let unsubChatList = null;
 let unsubMessages = null;
 let unsubChatDoc = null;
@@ -809,8 +771,8 @@ let isCurrentlyTyping = false;
 let heartbeatInterval = null;
 let searchDebounce = null;
 let chatListFirstLoad = true;
-let lastSeenTimestamps = new Map(); // chatId -> ms of lastMessageAt already notified about
-let lastMessageDocsCache = null; // most recent snapshot docs for the active chat, so we can re-run the read check when the app comes back to the foreground
+let lastSeenTimestamps = new Map();
+let lastMessageDocsCache = null;
 
 /* ================= Connection status (quiet) ================= */
 let listenerErrorCount = 0;
@@ -863,7 +825,10 @@ function showNotifBanner({avatar, title, body, onClick}){
 let swRegistration = null;
 
 function registerServiceWorker(){
-  if(!('serviceWorker' in navigator)) return;
+  if(!('serviceWorker' in navigator)){
+    console.warn('Service workers are not supported in this browser context.');
+    return;
+  }
   navigator.serviceWorker.register('./sw.js').then((reg) => {
     swRegistration = reg;
     let hasReloaded = false;
@@ -873,7 +838,10 @@ function registerServiceWorker(){
       toast('Updated — reloading…');
       setTimeout(() => location.reload(), 600);
     });
-  }).catch((err) => console.error('Service worker registration failed:', err));
+  }).catch((err) => {
+    console.error('Service worker registration failed:', err);
+    toast('Notifications need a background service worker, which failed to load: ' + err.message);
+  });
 
   navigator.serviceWorker.addEventListener('message', (event) => {
     if(event.data && event.data.type === 'notification-click' && event.data.chatId){
@@ -932,13 +900,6 @@ async function showOsNotification({avatar, title, body, chatId}){
         data: { chatId }
       });
     } else {
-      // No service worker registered (e.g. sw.js failed to load, or this
-      // browser doesn't support it) — fall back to a plain page-level
-      // Notification. This only works while the tab is still open in the
-      // background, not when the browser is fully closed. Wire the click
-      // to actually open the relevant chat, same as the SW path does,
-      // instead of just focusing the window and leaving the user to find
-      // the conversation themselves.
       const n = new Notification(title, { body, icon: avatar || './icon-192.png' });
       n.onclick = () => {
         window.focus();
@@ -951,6 +912,7 @@ async function showOsNotification({avatar, title, body, chatId}){
     }
   }catch(err){
     console.error('Notification failed:', err);
+    toast('Could not show notification: ' + err.message);
   }
 }
 
@@ -1208,17 +1170,6 @@ function startHeartbeat(){
   heartbeatInterval = setInterval(beat, 25000);
   document.addEventListener('visibilitychange', () => { if(document.visibilityState==='visible') beat(); });
 }
-// The app only ever goes through visibilitychange -> hidden when the user
-// backgrounds it (locks the phone, switches apps, taps Home). It never gets
-// torn down, so activeChatId/lastMessageDocsCache stay set the whole time.
-// Previously, markMessagesRead() ran unconditionally inside the messages
-// onSnapshot listener, so any message that arrived while the app was merely
-// sitting in the background (not actually being looked at) still got
-// stamped as read for the currently open chat — the sender would see
-// "Read" even though the recipient hadn't actually seen it on screen yet.
-// Now the snapshot handler only marks-as-read while the tab/app is visible,
-// and this listener catches up on whatever arrived while backgrounded the
-// moment the person actually returns to look at it.
 document.addEventListener('visibilitychange', () => {
   if(document.visibilityState === 'visible' && activeChatId && lastMessageDocsCache){
     markMessagesRead(lastMessageDocsCache);
@@ -1308,7 +1259,7 @@ async function startOrOpenDirectChat(partner){
 }
 
 /* ================= New group modal ================= */
-let groupSelected = new Map(); // uid -> user data
+let groupSelected = new Map();
 $('new-group-btn').addEventListener('click', () => {
   groupSelected.clear();
   $('group-name-input').value = '';
@@ -1414,7 +1365,13 @@ function chatDisplayInfo(chat){
 
 function listenChatList(){
   if(unsubChatList) unsubChatList();
-  chatListFirstLoad = true;
+  // Only suppress notifications on the very first-ever load (before we have
+  // any seen-timestamp history). A reconnect-triggered restart of this
+  // listener (see the 'online' handler above) must NOT reset this, or the
+  // very next real message after a network blip gets silently swallowed as
+  // if it were "already seen" — which was one of the reasons notifications
+  // seemed to randomly not fire.
+  if(lastSeenTimestamps.size === 0) chatListFirstLoad = true;
   unsubChatList = db.collection('chats')
     .where('members', 'array-contains', currentUser.uid)
     .onSnapshot(async (snap) => {
@@ -1584,18 +1541,20 @@ function openChat(chatId, chatData){
     }
   }, err => console.error('Chat doc listener error:', err));
 
+  // Capture which chat this specific messages-listener closure belongs to.
+  // Firestore listeners aren't guaranteed to stop firing the instant you
+  // call unsubscribe() — an in-flight snapshot for the PREVIOUS chat can
+  // still land right as you switch into a new one. Without this guard, that
+  // stray snapshot could stamp messages in the chat you just left as "read"
+  // (since the tab is still visible), which is what caused messages to show
+  // as Read even while you were looking at a completely different chat.
+  const listenerChatId = activeChatId;
   unsubMessages = db.collection('chats').doc(activeChatId).collection('messages')
     .orderBy('createdAt', 'asc')
     .onSnapshot(snap => {
       renderMessages(snap.docs.map(d => ({id:d.id, ...d.data()})));
       lastMessageDocsCache = snap.docs;
-      // Only stamp incoming messages as "read" while this device is actually
-      // in the foreground and looking at the chat. If the app is merely
-      // open in the background (phone locked, Home screen, another tab),
-      // document.visibilityState is 'hidden' and we skip this — the
-      // visibilitychange listener above catches it up once the person
-      // actually comes back and looks.
-      if(document.visibilityState === 'visible'){
+      if(document.visibilityState === 'visible' && activeChatId === listenerChatId){
         markMessagesRead(snap.docs);
       }
     }, err => {
@@ -1665,32 +1624,62 @@ function renderMessages(messages){
     time.className = 'msg-time';
     const canUnsend = m.senderId === currentUser.uid && !m.pending && !m.failed && !m.unsent;
     if(m.failed){
-      time.innerHTML = `Not sent <span class="retry-link" data-mid="${m.id}">Retry</span>`;
+      const retrySpan = document.createElement('span');
+      retrySpan.className = 'retry-link';
+      retrySpan.dataset.mid = m.id;
+      retrySpan.textContent = 'Retry';
+      time.appendChild(document.createTextNode('Not sent '));
+      time.appendChild(retrySpan);
     } else if(m.pending){
       time.textContent = 'Sending…';
     } else if(m.unsent){
       time.textContent = fmtTime(m.createdAt);
     } else {
-      time.innerHTML = escapeHtml(fmtTime(m.createdAt)) + (canUnsend ? ` <span class="unsend-link" data-mid="${m.id}">Unsend</span>` : '');
+      time.appendChild(document.createTextNode(fmtTime(m.createdAt)));
+      if(canUnsend){
+        const unsendSpan = document.createElement('span');
+        unsendSpan.className = 'unsend-link';
+        unsendSpan.dataset.mid = m.id;
+        unsendSpan.textContent = 'Unsend';
+        time.appendChild(document.createTextNode(' '));
+        time.appendChild(unsendSpan);
+      }
     }
     row.appendChild(time);
     wrap.appendChild(row);
     if(m.senderId === currentUser.uid && !m.pending && !m.failed && !m.unsent) lastMine = {m, row, time};
   });
-  wrap.querySelectorAll('.retry-link').forEach(link => {
-    link.addEventListener('click', () => retryMessage(link.dataset.mid));
-  });
   if(lastMine && !activeChat.isGroup){
     const read = lastMine.m.readBy && activePartner && lastMine.m.readBy.includes(activePartner.uid);
-    lastMine.time.innerHTML = escapeHtml(fmtTime(lastMine.m.createdAt) + '  ·  ' + (read ? 'Read' : 'Delivered')) +
-      ` <span class="unsend-link" data-mid="${lastMine.m.id}">Unsend</span>`;
+    lastMine.time.textContent = '';
+    lastMine.time.appendChild(document.createTextNode(fmtTime(lastMine.m.createdAt) + '  ·  ' + (read ? 'Read' : 'Delivered') + ' '));
+    const unsendSpan = document.createElement('span');
+    unsendSpan.className = 'unsend-link';
+    unsendSpan.dataset.mid = lastMine.m.id;
+    unsendSpan.textContent = 'Unsend';
+    lastMine.time.appendChild(unsendSpan);
   } else if(lastMine && activeChat.isGroup){
     const othersCount = activeChat.members.length - 1;
     const readCount = (lastMine.m.readBy || []).filter(uid => uid !== currentUser.uid).length;
-    lastMine.time.innerHTML = escapeHtml(fmtTime(lastMine.m.createdAt) + '  ·  ' +
-      (readCount >= othersCount && othersCount > 0 ? 'Read by all' : readCount > 0 ? `Read by ${readCount}` : 'Delivered')) +
-      ` <span class="unsend-link" data-mid="${lastMine.m.id}">Unsend</span>`;
+    const statusText = readCount >= othersCount && othersCount > 0 ? 'Read by all' : readCount > 0 ? `Read by ${readCount}` : 'Delivered';
+    lastMine.time.textContent = '';
+    lastMine.time.appendChild(document.createTextNode(fmtTime(lastMine.m.createdAt) + '  ·  ' + statusText + ' '));
+    const unsendSpan = document.createElement('span');
+    unsendSpan.className = 'unsend-link';
+    unsendSpan.dataset.mid = lastMine.m.id;
+    unsendSpan.textContent = 'Unsend';
+    lastMine.time.appendChild(unsendSpan);
   }
+  // Bind click handlers once, after all DOM (including the lastMine
+  // rewrite above) has settled — previously the lastMine branch used
+  // innerHTML to rewrite the last message's time row, which silently threw
+  // away any 'unsend-link'/'retry-link' listener bound before it ran.
+  // Since we now build every node explicitly with createElement instead of
+  // innerHTML, there's nothing left to destroy, and a single binding pass
+  // at the end reliably wires up every retry/unsend link that exists.
+  wrap.querySelectorAll('.retry-link').forEach(link => {
+    link.addEventListener('click', () => retryMessage(link.dataset.mid));
+  });
   wrap.querySelectorAll('.unsend-link').forEach(link => {
     link.addEventListener('click', () => unsendMessage(link.dataset.mid));
   });
@@ -1741,10 +1730,6 @@ async function unsendMessage(mid){
   }
 }
 
-// After an unsend, the chat list preview ("lastMessage"/"lastSenderId") may
-// have been pointing at the message that just got unsent. Recompute it from
-// whatever the newest message actually is now, without touching
-// lastMessageAt so the conversation doesn't jump to the top of the list.
 async function refreshChatPreview(chatId){
   try{
     const snap = await db.collection('chats').doc(chatId).collection('messages')
@@ -1875,12 +1860,37 @@ async function sendMessageInternal({ text, photoURL }){
   }catch(err){
     console.error('Send failed:', err);
     toast((navigator.onLine ? 'Message failed to send: ' : 'You\'re offline — ') + err.message);
+    // Previously this just toasted and gave up — the message vanished with
+    // no way to recover it, and the "Retry" link elsewhere in the code had
+    // nothing to actually retry. Write a locally-visible failed message
+    // record instead, so there's a real doc for the Retry link to act on.
+    try{
+      await msgRef.set({ ...msgPayload, failed: true, createdAt: FieldValue.serverTimestamp() });
+    }catch(e2){
+      console.error('Could not even save failed message locally:', e2);
+    }
   }
 }
 
-async function retryMessage(){
-  db.disableNetwork().then(() => db.enableNetwork()).catch(()=>{});
-  toast('Retrying…');
+// Previously this was a complete no-op disguised as a retry: it just
+// toggled the Firestore network connection off and on and showed
+// "Retrying…", without ever reading the failed message's content or
+// calling send again. A "failed" message would stay failed forever no
+// matter how many times you clicked Retry. This version actually reads the
+// failed doc's original text/photo, removes the failed placeholder, and
+// re-sends it for real through the normal send path.
+async function retryMessage(mid){
+  if(!activeChatId || !mid) return;
+  const ref = db.collection('chats').doc(activeChatId).collection('messages').doc(mid);
+  try{
+    const snap = await ref.get();
+    if(!snap.exists) return;
+    const data = snap.data();
+    await ref.delete();
+    await sendMessageInternal({ text: data.text || '', photoURL: data.photoURL || undefined });
+  }catch(err){
+    toast('Retry failed: ' + err.message);
+  }
 }
 
 /* ================= Profile modal ================= */
