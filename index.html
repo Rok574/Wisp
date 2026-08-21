@@ -208,7 +208,7 @@
   .empty-chats{padding:40px 24px; text-align:center; color:var(--ink-faint); font-size:13px; line-height:1.6;}
 
   /* Chat area */
-  .chat-area{display:flex; flex-direction:column; height:100%; background:var(--bg); min-width:0;}
+  .chat-area{display:flex; flex-direction:column; height:100%; background:var(--bg); min-width:0; min-height:0;}
   .chat-header{
     display:flex; align-items:center; gap:12px; padding:14px 22px; background:var(--surface);
     border-bottom:1px solid var(--border); flex-shrink:0;
@@ -219,7 +219,7 @@
   .chat-header-text .hstatus{font-size:12px; color:var(--ink-faint);}
   .chat-header-text .hstatus.online{color:var(--online);}
 
-  .messages{flex:1; overflow-y:auto; padding:22px 26px 8px; display:flex; flex-direction:column; gap:4px;}
+  .messages{flex:1; min-height:0; overflow-y:auto; padding:22px 26px 8px; display:flex; flex-direction:column; gap:4px;}
   .msg-row{display:flex; flex-direction:column; max-width:60%;}
   .msg-row.sent{align-self:flex-end; align-items:flex-end;}
   .msg-row.received{align-self:flex-start; align-items:flex-start;}
@@ -455,7 +455,7 @@
         <p>Pick a conversation, or search for someone to start a new one.</p>
       </div>
 
-      <div id="active-chat-view" style="display:none; flex-direction:column; height:100%;">
+      <div id="active-chat-view" style="display:none; flex-direction:column; height:100%; min-height:0;">
         <div class="chat-header">
           <button class="icon-btn back-btn" id="back-btn">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg>
@@ -651,23 +651,43 @@ let chatListFirstLoad = true;
 let lastSeenTimestamps = new Map(); // chatId -> ms of lastMessageAt already notified about
 
 /* ================= Connection status banner ================= */
-// onSnapshot's fromCache flag + explicit error handling is how we surface
-// "hey, you're not actually live right now" instead of just looking broken.
+// Firestore's own snapshots.metadata.fromCache is a more reliable signal
+// of "are we actually live" than navigator.onLine (which only reflects the
+// OS network interface, not whether Firestore's socket is up). We track the
+// most recent metadata from the chat-list listener as the source of truth,
+// and always clear "reconnecting" on a timer so a permanently-failing query
+// can never leave the banner stuck forever with no way out.
 let listenerErrorCount = 0;
+let connBannerClearTimer = null;
 function setConnBanner(mode){
   const el = $('conn-banner');
   const text = $('conn-banner-text');
+  clearTimeout(connBannerClearTimer);
   if(mode === 'offline'){
     text.textContent = "You're offline — messages will send once you're back online.";
     el.classList.add('show');
   } else if(mode === 'reconnecting'){
     text.textContent = 'Reconnecting…';
     el.classList.add('show');
+    // Never let this sit forever: if nothing clears it within 12s (no
+    // successful snapshot, no offline event either), assume the retry loop
+    // gave up and drop back to a neutral state rather than lying about
+    // "reconnecting" indefinitely.
+    connBannerClearTimer = setTimeout(() => {
+      if($('conn-banner-text').textContent === 'Reconnecting…'){
+        setConnBanner('none');
+      }
+    }, 12000);
   } else {
     el.classList.remove('show');
   }
 }
-window.addEventListener('online', () => setConnBanner('none'));
+window.addEventListener('online', () => {
+  // Coming back online should actively re-attach the listener rather than
+  // just clearing the banner and hoping the old subscription recovers.
+  setConnBanner('none');
+  if(currentUser) listenChatList();
+});
 window.addEventListener('offline', () => setConnBanner('offline'));
 if(!navigator.onLine) setConnBanner('offline');
 
@@ -1081,7 +1101,12 @@ function listenChatList(){
       const rows = [];
       for(const doc of snap.docs){
         const chat = doc.data();
-        if(!chat.members || !chat.lastMessageAt) continue; // skip malformed/partial docs
+        // Only skip truly malformed docs. A brand-new chat's lastMessageAt
+        // reads back as null from cache while the serverTimestamp() sentinel
+        // is still pending server ack — that's normal, not malformed, so we
+        // must NOT filter it out or a fresh DM disappears from the sidebar
+        // until someone actually replies.
+        if(!chat.members) continue;
         if(!chat.isGroup){
           const partnerUid = chat.members.find(u => u !== currentUser.uid);
           if(!partnerUid) continue;
@@ -1131,12 +1156,13 @@ function listenChatList(){
       console.error('Chat list listener error:', err);
       listenerErrorCount++;
       setConnBanner('reconnecting');
-      toast('Connection issue loading chats — retrying…');
-      // Firestore's SDK auto-retries onSnapshot internally, but if it ever
-      // fully drops (rare, e.g. after a long background tab), re-attach.
-      if(listenerErrorCount <= 3){
-        setTimeout(() => { if(currentUser) listenChatList(); }, 2000 * listenerErrorCount);
-      }
+      if(listenerErrorCount === 1) toast('Connection issue loading chats — retrying…');
+      // Keep retrying with a capped backoff instead of stopping after a
+      // few attempts — stopping is what left the banner stuck on
+      // "Reconnecting…" with no further action ever taken. Cap the delay
+      // at 15s so it keeps trying quietly rather than hammering or hanging.
+      const delay = Math.min(2000 * listenerErrorCount, 15000);
+      setTimeout(() => { if(currentUser) listenChatList(); }, delay);
     });
 }
 
