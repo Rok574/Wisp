@@ -1868,5 +1868,110 @@ $('modal-save-btn').addEventListener('click', async () => {
 $('signout-btn').addEventListener('click', () => auth.signOut());
 $('modal-signout-btn').addEventListener('click', () => { $('profile-modal').classList.remove('show'); auth.signOut(); });
 </script>
+  <!-- WISP IFRAME & FIRESTORE FIX PATCH -->
+<script>
+(function() {
+  'use me';
+
+  // 1. SILENCE MANIFEST 404 IN IFRAMES
+  const manifestLink = document.querySelector('link[rel="manifest"]');
+  if (manifestLink && (window.self !== window.top || location.protocol === 'about:')) {
+    manifestLink.remove();
+  }
+
+  // 2. WAIT FOR FIREBASE TO INITIALIZE
+  function applyFirebaseFixes() {
+    if (typeof firebase === 'undefined' || !firebase.apps.length) {
+      setTimeout(applyFirebaseFixes, 50);
+      return;
+    }
+
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    // 3. FORCE PERSISTENCE FOR ABOUT:SRCDOC / IFRAMES
+    // Tries LOCAL first; falls back to SESSION or NONE if iframe blocks cookies/indexedDB
+    auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL)
+      .catch(function() {
+        return auth.setPersistence(firebase.auth.Auth.Persistence.SESSION);
+      })
+      .catch(function() {
+        return auth.setPersistence(firebase.auth.Auth.Persistence.NONE);
+      });
+
+    // 4. AUTH GUARD FOR FIRESTORE LISTENERS
+    let activeChatListener = null;
+
+    auth.onAuthStateChanged(function(user) {
+      // Clean up previous real-time listeners if user logs out or switches
+      if (activeChatListener) {
+        activeChatListener();
+        activeChatListener = null;
+      }
+
+      if (user) {
+        // Safe chat listener - explicitly filters by participant UID
+        // preventing "Missing or insufficient permissions" error
+        try {
+          activeChatListener = db.collection('chats')
+            .where('participants', 'array-contains', user.uid)
+            .onSnapshot(function(snapshot) {
+              // Dispatch event so your main app script can consume data cleanly
+              window.dispatchEvent(new CustomEvent('wisp:chats-updated', { detail: snapshot }));
+            }, function(error) {
+              console.warn('[Wisp Fix] Chat listener caught standard permission block:', error.message);
+            });
+        } catch (e) {
+          console.error('[Wisp Fix] Error attaching safe chat listener:', e);
+        }
+      } else {
+        // Automatically hide chat interface if auth session is missing/dropped inside iframe
+        const appEl = document.getElementById('app');
+        const authEl = document.getElementById('auth-screen');
+        if (appEl && authEl && appEl.style.display !== 'none') {
+          appEl.style.display = 'none';
+          authEl.style.display = 'flex';
+        }
+      }
+    });
+
+    // 5. HELPER: SAFE DM OPENER (Expose globally to prevent unhandled permission errors)
+    window.openOrCreateDirectMessage = async function(targetUserId) {
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        alert("Authentication session lost inside iframe. Please log in again.");
+        return;
+      }
+
+      const chatId = [currentUser.uid, targetUserId].sort().join('_');
+      const chatRef = db.collection('chats').doc(chatId);
+
+      try {
+        const doc = await chatRef.get();
+        if (!doc.exists) {
+          // Create document matching request.resource.data.participants security rule
+          await chatRef.set({
+            participants: [currentUser.uid, targetUserId],
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            lastMessage: '',
+            lastMessageTime: firebase.firestore.FieldValue.serverTimestamp()
+          });
+        }
+        return chatId;
+      } catch (err) {
+        console.error("[Wisp Fix] Permission issue opening DM:", err);
+        alert("Cannot open chat: Check Firestore Rules for /chats path.");
+      }
+    };
+  }
+
+  // Execute patch script
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', applyFirebaseFixes);
+  } else {
+    applyFirebaseFixes();
+  }
+})();
+</script>
 </body>
 </html>
