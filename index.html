@@ -438,18 +438,27 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 const FieldValue = firebase.firestore.FieldValue;
 
-/* Profile picture hosting via Catbox (no Firebase Storage / Blaze plan needed) */
-async function uploadToCatbox(file){
-  if(file.size > 6 * 1024 * 1024){
-    throw new Error('Image is too large — please choose one under 6MB.');
+/* Profile picture hosting via imgbb (no Firebase Storage / Blaze plan needed) */
+/* Get a free API key at https://api.imgbb.com/ and paste it below */
+const IMGBB_API_KEY = "3745543517b0a1df6a651002054ad454";
+
+async function uploadToImgbb(file){
+  if(IMGBB_API_KEY === "PASTE_YOUR_IMGBB_API_KEY_HERE"){
+    throw new Error('Add your imgbb API key in the script (IMGBB_API_KEY) — see api.imgbb.com');
+  }
+  if(file.size > 32 * 1024 * 1024){
+    throw new Error('Image is too large — please choose one under 32MB.');
   }
   const form = new FormData();
-  form.append('reqtype', 'fileupload');
-  form.append('fileToUpload', file);
-  const res = await fetch('https://catbox.moe/user/api.php', { method: 'POST', body: form });
-  if(!res.ok) throw new Error('Catbox upload failed (' + res.status + ')');
-  const text = (await res.text()).trim();
-  if(!text.startsWith('http')) throw new Error('Catbox upload failed: ' + text);
+  form.append('image', file);
+  const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
+    method: 'POST', body: form
+  });
+  const data = await res.json().catch(() => null);
+  if(!res.ok || !data || !data.success){
+    throw new Error('imgbb upload failed: ' + (data && data.error && data.error.message ? data.error.message : res.status));
+  }
+  return data.data.display_url || data.data.url;
   return text;
 }
 
@@ -612,7 +621,7 @@ $('setup-submit-btn').addEventListener('click', async () => {
     let photoURL = defaultAvatar(currentUser.uid);
     if(setupAvatarFile){
       console.log('Uploading avatar to Catbox…');
-      photoURL = await withTimeout(uploadToCatbox(setupAvatarFile), 20000, 'Avatar upload');
+      photoURL = await withTimeout(uploadToImgbb(setupAvatarFile), 20000, 'Avatar upload');
       console.log('Avatar uploaded:', photoURL);
     }
 
@@ -978,7 +987,7 @@ $('modal-save-btn').addEventListener('click', async () => {
 
     let photoURL = myDoc.photoURL;
     if(modalAvatarFile){
-      photoURL = await withTimeout(uploadToCatbox(modalAvatarFile), 20000, 'Avatar upload');
+      photoURL = await withTimeout(uploadToImgbb(modalAvatarFile), 20000, 'Avatar upload');
     }
 
     if(usernameChanged){
