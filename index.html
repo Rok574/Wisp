@@ -287,15 +287,19 @@
   }
   .bubble.pending{opacity:.6;}
   .bubble.failed{opacity:.75; outline:1.5px solid var(--danger);}
+  .bubble.unsent{font-style:italic; opacity:.6;}
   .bubble img.msg-photo{
     display:block; max-width:240px; max-height:320px; border-radius:10px; object-fit:cover; cursor:pointer;
   }
   .bubble.has-photo{padding:5px;}
   .msg-row.sent .bubble{background:var(--accent); color:var(--accent-ink); border-bottom-right-radius:5px;}
   .msg-row.received .bubble{background:var(--bubble-received); color:var(--ink); border-bottom-left-radius:5px;}
+  .msg-row.sent .bubble.unsent{background:var(--bubble-received); color:var(--ink);}
   .msg-row + .msg-row{margin-top:2px;}
   .msg-time{font-size:10.5px; color:var(--ink-faint); font-family:var(--font-mono); margin:3px 4px 10px;}
   .retry-link{color:var(--danger); cursor:pointer; text-decoration:underline; margin-left:4px;}
+  .unsend-link{color:var(--ink-faint); cursor:pointer; text-decoration:underline; margin-left:4px;}
+  .unsend-link:hover{color:var(--danger);}
 
   .typing-row{display:flex; align-self:flex-start; padding:6px 4px;}
   .typing-bubble{
@@ -806,6 +810,7 @@ let heartbeatInterval = null;
 let searchDebounce = null;
 let chatListFirstLoad = true;
 let lastSeenTimestamps = new Map(); // chatId -> ms of lastMessageAt already notified about
+let lastMessageDocsCache = null; // most recent snapshot docs for the active chat, so we can re-run the read check when the app comes back to the foreground
 
 /* ================= Connection status (quiet) ================= */
 let listenerErrorCount = 0;
@@ -1203,6 +1208,22 @@ function startHeartbeat(){
   heartbeatInterval = setInterval(beat, 25000);
   document.addEventListener('visibilitychange', () => { if(document.visibilityState==='visible') beat(); });
 }
+// The app only ever goes through visibilitychange -> hidden when the user
+// backgrounds it (locks the phone, switches apps, taps Home). It never gets
+// torn down, so activeChatId/lastMessageDocsCache stay set the whole time.
+// Previously, markMessagesRead() ran unconditionally inside the messages
+// onSnapshot listener, so any message that arrived while the app was merely
+// sitting in the background (not actually being looked at) still got
+// stamped as read for the currently open chat — the sender would see
+// "Read" even though the recipient hadn't actually seen it on screen yet.
+// Now the snapshot handler only marks-as-read while the tab/app is visible,
+// and this listener catches up on whatever arrived while backgrounded the
+// moment the person actually returns to look at it.
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState === 'visible' && activeChatId && lastMessageDocsCache){
+    markMessagesRead(lastMessageDocsCache);
+  }
+});
 function teardownApp(){
   clearInterval(heartbeatInterval);
   if(unsubChatList) unsubChatList();
@@ -1213,6 +1234,7 @@ function teardownApp(){
   activeChatId = null; activeChat = null; activePartner = null;
   chatListFirstLoad = true;
   lastSeenTimestamps.clear();
+  lastMessageDocsCache = null;
 }
 
 /* ================= User search ================= */
@@ -1511,6 +1533,7 @@ function openChat(chatId, chatData){
   clearTimeout(typingTimeout);
   isCurrentlyTyping = false;
   activeChatId = chatId;
+  lastMessageDocsCache = null;
 
   const info = chatDisplayInfo(chatData);
   activeChat = {
@@ -1565,7 +1588,16 @@ function openChat(chatId, chatData){
     .orderBy('createdAt', 'asc')
     .onSnapshot(snap => {
       renderMessages(snap.docs.map(d => ({id:d.id, ...d.data()})));
-      markMessagesRead(snap.docs);
+      lastMessageDocsCache = snap.docs;
+      // Only stamp incoming messages as "read" while this device is actually
+      // in the foreground and looking at the chat. If the app is merely
+      // open in the background (phone locked, Home screen, another tab),
+      // document.visibilityState is 'hidden' and we skip this — the
+      // visibilitychange listener above catches it up once the person
+      // actually comes back and looks.
+      if(document.visibilityState === 'visible'){
+        markMessagesRead(snap.docs);
+      }
     }, err => {
       console.error('Messages listener error:', err);
       toast('Trouble loading messages — retrying…');
@@ -1608,8 +1640,10 @@ function renderMessages(messages){
     }
     lastSenderId = m.senderId;
     const bubble = document.createElement('div');
-    bubble.className = 'bubble' + (m.photoURL ? ' has-photo' : '') + (m.pending ? ' pending' : '') + (m.failed ? ' failed' : '');
-    if(m.photoURL){
+    bubble.className = 'bubble' + (m.photoURL ? ' has-photo' : '') + (m.pending ? ' pending' : '') + (m.failed ? ' failed' : '') + (m.unsent ? ' unsent' : '');
+    if(m.unsent){
+      bubble.textContent = m.senderId === currentUser.uid ? 'You unsent a message' : `${(m.senderName || 'This person').split(' ')[0]} unsent a message`;
+    } else if(m.photoURL){
       const img = document.createElement('img');
       img.className = 'msg-photo';
       img.src = m.photoURL;
@@ -1629,29 +1663,37 @@ function renderMessages(messages){
     row.appendChild(bubble);
     const time = document.createElement('div');
     time.className = 'msg-time';
+    const canUnsend = m.senderId === currentUser.uid && !m.pending && !m.failed && !m.unsent;
     if(m.failed){
       time.innerHTML = `Not sent <span class="retry-link" data-mid="${m.id}">Retry</span>`;
     } else if(m.pending){
       time.textContent = 'Sending…';
-    } else {
+    } else if(m.unsent){
       time.textContent = fmtTime(m.createdAt);
+    } else {
+      time.innerHTML = escapeHtml(fmtTime(m.createdAt)) + (canUnsend ? ` <span class="unsend-link" data-mid="${m.id}">Unsend</span>` : '');
     }
     row.appendChild(time);
     wrap.appendChild(row);
-    if(m.senderId === currentUser.uid && !m.pending && !m.failed) lastMine = {m, row, time};
+    if(m.senderId === currentUser.uid && !m.pending && !m.failed && !m.unsent) lastMine = {m, row, time};
   });
   wrap.querySelectorAll('.retry-link').forEach(link => {
     link.addEventListener('click', () => retryMessage(link.dataset.mid));
   });
   if(lastMine && !activeChat.isGroup){
     const read = lastMine.m.readBy && activePartner && lastMine.m.readBy.includes(activePartner.uid);
-    lastMine.time.textContent = (fmtTime(lastMine.m.createdAt) + '  ·  ' + (read ? 'Read' : 'Delivered'));
+    lastMine.time.innerHTML = escapeHtml(fmtTime(lastMine.m.createdAt) + '  ·  ' + (read ? 'Read' : 'Delivered')) +
+      ` <span class="unsend-link" data-mid="${lastMine.m.id}">Unsend</span>`;
   } else if(lastMine && activeChat.isGroup){
     const othersCount = activeChat.members.length - 1;
     const readCount = (lastMine.m.readBy || []).filter(uid => uid !== currentUser.uid).length;
-    lastMine.time.textContent = fmtTime(lastMine.m.createdAt) + '  ·  ' +
-      (readCount >= othersCount && othersCount > 0 ? 'Read by all' : readCount > 0 ? `Read by ${readCount}` : 'Delivered');
+    lastMine.time.innerHTML = escapeHtml(fmtTime(lastMine.m.createdAt) + '  ·  ' +
+      (readCount >= othersCount && othersCount > 0 ? 'Read by all' : readCount > 0 ? `Read by ${readCount}` : 'Delivered')) +
+      ` <span class="unsend-link" data-mid="${lastMine.m.id}">Unsend</span>`;
   }
+  wrap.querySelectorAll('.unsend-link').forEach(link => {
+    link.addEventListener('click', () => unsendMessage(link.dataset.mid));
+  });
   if(typingEl) wrap.appendChild(typingEl);
   wrap.scrollTop = wrap.scrollHeight + 999;
 }
@@ -1681,6 +1723,48 @@ function renderTyping(chat){
 $('back-btn').addEventListener('click', () => {
   $('app').classList.remove('chat-open');
 });
+
+/* ================= Unsend a message ================= */
+async function unsendMessage(mid){
+  if(!activeChatId || !mid) return;
+  if(!confirm('Unsend this message? This removes it for everyone and can\'t be undone.')) return;
+  const chatId = activeChatId;
+  try{
+    await db.collection('chats').doc(chatId).collection('messages').doc(mid).update({
+      unsent: true,
+      text: FieldValue.delete(),
+      photoURL: FieldValue.delete()
+    });
+    await refreshChatPreview(chatId);
+  }catch(err){
+    toast('Could not unsend: ' + err.message);
+  }
+}
+
+// After an unsend, the chat list preview ("lastMessage"/"lastSenderId") may
+// have been pointing at the message that just got unsent. Recompute it from
+// whatever the newest message actually is now, without touching
+// lastMessageAt so the conversation doesn't jump to the top of the list.
+async function refreshChatPreview(chatId){
+  try{
+    const snap = await db.collection('chats').doc(chatId).collection('messages')
+      .orderBy('createdAt', 'desc').limit(1).get();
+    const chatRef = db.collection('chats').doc(chatId);
+    if(snap.empty){
+      await chatRef.update({lastMessage: '', lastSenderId: null, lastSenderName: null});
+      return;
+    }
+    const last = snap.docs[0].data();
+    const preview = last.unsent ? 'Message unsent' : (last.text || (last.photoURL ? '📷 Photo' : ''));
+    await chatRef.update({
+      lastMessage: preview,
+      lastSenderId: last.senderId || null,
+      lastSenderName: last.senderName || null
+    });
+  }catch(err){
+    console.error('Could not refresh chat preview:', err);
+  }
+}
 
 /* ================= Composer ================= */
 function attachComposerHandlers(){
