@@ -638,36 +638,53 @@ const FieldValue = firebase.firestore.FieldValue;
 
 db.enableNetwork().catch(() => {});
 
-/* Profile picture / message photo hosting via imgbb (no Firebase Storage / Blaze plan needed) */
-const IMGBB_API_KEY = "3745543517b0a1df6a651002054ad454";
+const PROXY_URL = "https://script.google.com/macros/s/AKfycbwv-bw-7N8NSC1wFNs0e8VFQGyAHaNRhkRTguIbaZ42pTLFWcsak-ezNLVa0p4wD_OL/exec";
 
-async function uploadToImgbb(file){
-  if(!IMGBB_API_KEY || IMGBB_API_KEY === "PASTE_YOUR_IMGBB_API_KEY_HERE"){
-    throw new Error('Add your imgbb API key in the script (IMGBB_API_KEY) — see api.imgbb.com');
+async function uploadToImgbb(file) {
+  if (!file.type || !file.type.startsWith('image/')) {
+    throw new Error('Please select a valid image file.');
   }
-  if(!file.type || !file.type.startsWith('image/')){
-    throw new Error('Please choose an image file.');
+
+  // Wisp proxies can struggle with large payloads, keep uploads sensible
+  if (file.size > 16 * 1024 * 1024) {
+    throw new Error('Image size exceeds 16MB limit for proxy transmission.');
   }
-  if(file.size > 32 * 1024 * 1024){
-    throw new Error('Image is too large — please choose one under 32MB.');
-  }
-  const form = new FormData();
-  form.append('image', file);
-  let res;
-  try{
-    res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
-      method: 'POST', body: form
+
+  // Convert File to raw Base64 string
+  const base64Image = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = (err) => reject(err);
+    reader.readAsDataURL(file);
+  });
+
+  try {
+    // text/plain prevents browser preflight (OPTIONS) requests that Apps Script blocks
+    const response = await fetch(PROXY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ image: base64Image }),
+      redirect: 'follow'
     });
-  }catch(networkErr){
-    throw new Error("Couldn't reach the image host — your network or wifi may be blocking it. Photo uploads need access to api.imgbb.com.");
-  }
-  const data = await res.json().catch(() => null);
-  if(!res.ok || !data || !data.success){
-    throw new Error('Image upload failed: ' + (data && data.error && data.error.message ? data.error.message : `server returned ${res.status}`));
-  }
-  return data.data.display_url || data.data.url;
-}
 
+    if (!response.ok) {
+      throw new Error(`HTTP error! Status: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (!data.success) {
+      const msg = data.error && data.error.message ? data.error.message : 'Upload failed';
+      throw new Error(msg);
+    }
+
+    return data.data.display_url || data.data.url;
+
+  } catch (err) {
+    throw new Error(`Wisp upload proxy error: ${err.message}`);
+  }
+}
+  
 /* ================= Helpers ================= */
 const $ = (id) => document.getElementById(id);
 function toast(msg){
