@@ -260,9 +260,13 @@
   }
   .back-btn{display:none;}
   .chat-header img{width:38px; height:38px; border-radius:50%; object-fit:cover;}
+  .chat-header-text{flex:1; min-width:0; cursor:pointer;}
   .chat-header-text .hname{font-weight:600; font-size:14.5px;}
   .chat-header-text .hstatus{font-size:12px; color:var(--ink-faint);}
   .chat-header-text .hstatus.online{color:var(--online);}
+  .header-avatar-wrap{cursor:pointer; flex-shrink:0;}
+  .group-avatar-stack.header-size{width:38px; height:38px; font-size:13px;}
+  .info-btn{flex-shrink:0;}
 
   .messages{flex:1; min-height:0; overflow-y:auto; padding:22px 26px 8px; display:flex; flex-direction:column; gap:4px;}
   .msg-row{display:flex; flex-direction:column; max-width:60%; min-width:0;}
@@ -274,14 +278,17 @@
   }
   .bubble.pending{opacity:.6;}
   .bubble.failed{opacity:.75; outline:1.5px solid var(--danger);}
-  .bubble.unsent{font-style:italic; opacity:.6;}
+  .bubble.system{
+    background:transparent; color:var(--ink-faint); font-size:12px; text-align:center; font-style:italic;
+    padding:6px 10px;
+  }
   .bubble img.msg-photo{
     display:block; max-width:240px; max-height:320px; border-radius:10px; object-fit:cover; cursor:pointer;
   }
   .bubble.has-photo{padding:5px;}
   .msg-row.sent .bubble{background:var(--accent); color:var(--accent-ink); border-bottom-right-radius:5px;}
   .msg-row.received .bubble{background:var(--bubble-received); color:var(--ink); border-bottom-left-radius:5px;}
-  .msg-row.sent .bubble.unsent{background:var(--bubble-received); color:var(--ink);}
+  .msg-row.system{align-self:center; max-width:80%;}
   .msg-row + .msg-row{margin-top:2px;}
   .msg-time{font-size:10.5px; color:var(--ink-faint); font-family:var(--font-mono); margin:3px 4px 10px; display:flex; align-items:center; gap:2px; flex-wrap:wrap;}
   .retry-link{color:var(--danger); cursor:pointer; text-decoration:underline; margin-left:4px; padding:4px 2px; display:inline-block;}
@@ -333,7 +340,7 @@
   .no-chat-state h3{font-family:var(--font-display); font-size:19px; color:var(--ink-soft); font-weight:600;}
   .no-chat-state p{font-size:13px; max-width:260px; line-height:1.5;}
 
-  /* Modal (profile settings / new group / photo preview) */
+  /* Modal (profile settings / new group / photo preview / group info) */
   .modal-backdrop{
     position:fixed; inset:0; background:rgba(27,29,43,.35); z-index:200; display:none;
     align-items:center; justify-content:center; padding:20px;
@@ -342,18 +349,31 @@
   .modal{
     background:var(--surface); border-radius:var(--radius-lg); padding:30px; width:100%; max-width:380px;
     display:flex; flex-direction:column; gap:18px;
+    max-height:88vh; overflow-y:auto;
   }
   .modal h3{font-family:var(--font-display); font-size:21px; font-weight:600;}
   .modal-actions{display:flex; gap:10px; justify-content:flex-end; margin-top:4px;}
   .ghost-btn{padding:11px 16px; border-radius:10px; font-weight:600; font-size:13.5px; color:var(--ink-soft);}
   .ghost-btn:hover{background:var(--bg);}
   .danger-btn{color:var(--danger); font-weight:600; font-size:13px;}
-   .toast{
-    position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:var(--surface); color:var(--ink); border:1px solid var(--border); box-shadow:0 8px 24px -6px rgba(0,0,0,.3);
-    padding:11px 20px; border-radius:11px; font-size:13px; z-index:300; opacity:0; pointer-events:none;
-    transition:opacity .2s ease, transform .2s ease; max-width:80vw; text-align:center;
+   .toast-stack{
+    position:fixed; bottom:24px; left:50%; transform:translateX(-50%); z-index:300;
+    display:flex; flex-direction:column; gap:8px; align-items:center; width:100%; max-width:420px; padding:0 16px;
+    pointer-events:none;
   }
-  .toast.show{opacity:1; transform:translateX(-50%) translateY(-6px);}
+  .toast{
+    pointer-events:auto; background:var(--surface); color:var(--ink); border:1px solid var(--border);
+    box-shadow:0 8px 24px -6px rgba(0,0,0,.3);
+    padding:11px 16px; border-radius:11px; font-size:13px; opacity:0; transform:translateY(8px);
+    transition:opacity .2s ease, transform .2s ease; max-width:100%; text-align:left;
+    display:flex; align-items:center; gap:10px; cursor:default;
+  }
+  .toast.show{opacity:1; transform:translateY(0);}
+  .toast img{width:28px; height:28px; border-radius:50%; object-fit:cover; flex-shrink:0;}
+  .toast .toast-text{min-width:0;}
+  .toast .toast-title{font-weight:600; font-size:12.5px;}
+  .toast .toast-body{font-size:12.5px; color:var(--ink-soft); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:260px;}
+  .toast.clickable{cursor:pointer;}
 
   input[type="file"]{display:none;}
 
@@ -367,24 +387,6 @@
     .back-btn{display:flex;}
     .msg-row{max-width:80%;}
   }
-
-  /* ---------- In-app notifications ---------- */
-  #notif-stack{
-    position:fixed; top:16px; left:50%; transform:translateX(-50%); z-index:400;
-    display:flex; flex-direction:column; gap:8px; align-items:center; width:100%; max-width:420px; padding:0 16px;
-    pointer-events:none;
-  }
-  .notif-banner{
-    pointer-events:auto; width:100%; background:var(--surface); border:1px solid var(--border);
-    border-radius:14px; padding:12px 14px; display:flex; align-items:center; gap:11px;
-    box-shadow:0 12px 32px -12px rgba(0,0,0,.25); cursor:pointer;
-    transform:translateY(-16px); opacity:0; transition:transform .25s ease, opacity .25s ease;
-  }
-  .notif-banner.show{transform:translateY(0); opacity:1;}
-  .notif-banner img{width:36px; height:36px; border-radius:50%; object-fit:cover; flex-shrink:0;}
-  .notif-banner-text{min-width:0; flex:1;}
-  .notif-banner-text .nname{font-weight:600; font-size:13.5px;}
-  .notif-banner-text .nbody{font-size:12.5px; color:var(--ink-soft); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
 
   /* ---------- Group chat bits ---------- */
   .group-avatar-stack{
@@ -409,6 +411,45 @@
     padding:10px 12px; border:1px solid var(--border); border-radius:10px; font-size:13.5px; outline:none;
   }
   .group-search-input:focus{border-color:var(--accent);}
+
+  /* Group info modal */
+  .group-info-header{display:flex; flex-direction:column; align-items:center; gap:10px; text-align:center;}
+  .group-info-avatar-wrap{position:relative;}
+  .group-info-avatar-wrap .group-avatar-stack, .group-info-avatar-wrap img.avatar-preview{width:76px; height:76px; font-size:24px;}
+  .group-info-avatar-wrap label{
+    position:absolute; bottom:-2px; right:-2px; width:26px; height:26px; border-radius:50%;
+    background:var(--accent); color:#fff; display:flex; align-items:center; justify-content:center;
+    border:2px solid var(--surface); cursor:pointer;
+  }
+  .group-info-avatar-wrap label svg{width:13px; height:13px;}
+  .group-info-name-row{display:flex; align-items:center; gap:8px; width:100%;}
+  .group-info-name-row input{
+    flex:1; text-align:center; font-family:var(--font-display); font-size:19px; font-weight:600;
+    border:1px solid transparent; border-radius:8px; padding:4px 8px; background:transparent; color:var(--ink);
+  }
+  .group-info-name-row input:focus{border-color:var(--border); background:var(--bg); outline:none;}
+  .section-label{
+    font-size:11.5px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-faint);
+    margin-bottom:2px;
+  }
+  .member-list{display:flex; flex-direction:column; gap:2px; max-height:200px; overflow-y:auto;}
+  .member-row{display:flex; align-items:center; gap:10px; padding:7px 4px; border-radius:9px;}
+  .member-row img{width:32px; height:32px; border-radius:50%; object-fit:cover; flex-shrink:0;}
+  .member-row .mname{font-size:13.5px; font-weight:600; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .member-row .mtag{font-size:10.5px; color:var(--accent); background:var(--accent-soft); padding:1px 7px; border-radius:6px; font-weight:700; text-transform:uppercase; letter-spacing:.03em;}
+  .member-row .remove-member-btn{
+    color:var(--ink-faint); width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  }
+  .member-row .remove-member-btn:hover{color:var(--danger); background:var(--bg);}
+  .member-row .remove-member-btn svg{width:15px; height:15px;}
+  .add-member-btn{
+    display:flex; align-items:center; gap:8px; padding:8px 4px; color:var(--accent); font-weight:600; font-size:13px; border-radius:9px;
+  }
+  .add-member-btn:hover{background:var(--bg);}
+  .add-member-btn .plus-circle{
+    width:26px; height:26px; border-radius:50%; background:var(--accent-soft); display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  }
+  .add-member-btn .plus-circle svg{width:14px; height:14px;}
 </style>
 </head>
 <body>
@@ -488,9 +529,6 @@
   </div>
 </div>
 
-<!-- IN-APP NOTIFICATIONS (top banner stack) -->
-<div id="notif-stack"></div>
-
 <!-- APP -->
 <div id="app">
   <div class="shell">
@@ -542,11 +580,17 @@
           <button class="icon-btn back-btn" id="back-btn">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg>
           </button>
-          <img id="header-avatar" src="" alt="">
-          <div class="chat-header-text">
+          <div class="header-avatar-wrap" id="header-avatar-wrap">
+            <img id="header-avatar" src="" alt="">
+            <div class="group-avatar-stack header-size" id="header-group-avatar" style="display:none;"></div>
+          </div>
+          <div class="chat-header-text" id="chat-header-text">
             <div class="hname" id="header-name">—</div>
             <div class="hstatus" id="header-status">—</div>
           </div>
+          <button class="icon-btn info-btn" id="group-info-btn" title="Group info" style="display:none;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          </button>
         </div>
         <div class="messages" id="messages"></div>
         <div class="composer">
@@ -614,7 +658,60 @@
   </div>
 </div>
 
-<div class="toast" id="toast"></div>
+<!-- GROUP INFO MODAL -->
+<div class="modal-backdrop" id="group-info-modal">
+  <div class="modal">
+    <div class="group-info-header">
+      <div class="group-info-avatar-wrap">
+        <div class="group-avatar-stack" id="ginfo-avatar-stack" style="display:none;"></div>
+        <img id="ginfo-avatar-img" class="avatar-preview" src="" alt="" style="display:none;">
+        <label for="ginfo-avatar-input">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+        </label>
+        <input type="file" id="ginfo-avatar-input" accept="image/*">
+      </div>
+      <div class="group-info-name-row">
+        <input type="text" id="ginfo-name-input" maxlength="40" placeholder="Group name">
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label" id="ginfo-members-label">Members</div>
+      <div class="member-list" id="ginfo-member-list"></div>
+      <button class="add-member-btn" id="ginfo-add-member-btn">
+        <span class="plus-circle">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        </span>
+        Add people
+      </button>
+    </div>
+
+    <div class="modal-actions">
+      <button class="ghost-btn danger-btn" id="ginfo-leave-btn">Leave group</button>
+      <button class="ghost-btn" id="ginfo-close-btn">Close</button>
+      <button class="primary-btn" id="ginfo-save-btn">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD MEMBERS MODAL (from within group info) -->
+<div class="modal-backdrop" id="add-member-modal">
+  <div class="modal">
+    <h3>Add people</h3>
+    <div class="field">
+      <input type="text" class="group-search-input" id="add-member-search-input" placeholder="Search by username">
+    </div>
+    <div class="group-picker-list" id="add-member-picker-list">
+      <div class="result-empty">Search for people to add.</div>
+    </div>
+    <div class="modal-actions">
+      <button class="ghost-btn" id="add-member-cancel-btn">Cancel</button>
+      <button class="primary-btn" id="add-member-confirm-btn" disabled>Add</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-stack" id="toast-stack"></div>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -638,7 +735,7 @@ const FieldValue = firebase.firestore.FieldValue;
 
 db.enableNetwork().catch(() => {});
 
-const PROXY_URL = "https://script.google.com/macros/s/AKfycbx1AlxWEdXqRt4FaEocTUmuvVGew50naml8Ot4M-wWxmUfksRdnJx9a98beRNTCHwNB8Q/exec";
+const PROXY_URL = "https://script.google.com/macros/s/AKfycbwv-bw-7N8NSC1wFNs0e8VFQGyAHaNRhkRTguIbaZ42pTLFWcsak-ezNLVa0p4wD_OL/exec";
 
 async function uploadToImgbb(file) {
   if (!file.type || !file.type.startsWith('image/')) {
@@ -658,12 +755,22 @@ async function uploadToImgbb(file) {
     reader.readAsDataURL(file);
   });
 
+  // Derive a safe filename/extension from the original file, since the
+  // Catbox-backed proxy uses these to build the uploaded blob and its
+  // proxied URL (defaults to .jpg if omitted).
+  const extFromType = (file.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
+  const safeName = (file.name && file.name.trim()) ? file.name.trim() : `img_${Date.now()}.${extFromType}`;
+
   try {
     // text/plain prevents browser preflight (OPTIONS) requests that Apps Script blocks
     const response = await fetch(PROXY_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ image: base64Image }),
+      body: JSON.stringify({
+        image: base64Image,
+        mimeType: file.type,
+        fileName: safeName
+      }),
       redirect: 'follow'
     });
 
@@ -674,26 +781,67 @@ async function uploadToImgbb(file) {
     const data = await response.json();
 
     if (!data.success) {
-      const msg = data.error && data.error.message ? data.error.message : 'Upload failed';
+      const msg = (data.error && data.error.message) ? data.error.message : (data.error || 'Upload failed');
       throw new Error(msg);
     }
 
-    return data.data.display_url || data.data.url;
+    return data.data.url || data.data.display_url || data.data.originalCatboxUrl;
 
   } catch (err) {
     throw new Error(`Wisp upload proxy error: ${err.message}`);
   }
 }
-  
+
 /* ================= Helpers ================= */
 const $ = (id) => document.getElementById(id);
-function toast(msg){
-  const t = $('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  clearTimeout(toast._t);
-  toast._t = setTimeout(()=> t.classList.remove('show'), 2800);
+
+/* ---- Toasts (also used for what were previously "in-app notification banners") ---- */
+function toast(msg, opts){
+  opts = opts || {};
+  const stack = $('toast-stack');
+  const el = document.createElement('div');
+  el.className = 'toast' + (opts.onClick ? ' clickable' : '');
+  if(opts.avatar){
+    const img = document.createElement('img');
+    img.src = opts.avatar;
+    img.alt = opts.title || '';
+    img.addEventListener('error', () => window.__avatarFallback(img));
+    el.appendChild(img);
+  }
+  const textWrap = document.createElement('div');
+  textWrap.className = 'toast-text';
+  if(opts.title){
+    const t = document.createElement('div');
+    t.className = 'toast-title';
+    t.textContent = opts.title;
+    textWrap.appendChild(t);
+  }
+  const b = document.createElement('div');
+  b.className = opts.title ? 'toast-body' : '';
+  b.textContent = msg;
+  b.style.fontSize = opts.title ? '' : '13px';
+  b.style.color = opts.title ? '' : 'var(--ink)';
+  textWrap.appendChild(b);
+  el.appendChild(textWrap);
+  if(opts.onClick){
+    el.addEventListener('click', () => {
+      opts.onClick();
+      removeToast(el);
+    });
+  }
+  stack.appendChild(el);
+  requestAnimationFrame(() => el.classList.add('show'));
+  const duration = opts.duration || (opts.title ? 4500 : 2800);
+  el._timer = setTimeout(() => removeToast(el), duration);
+  return el;
 }
+function removeToast(el){
+  if(!el || !el.parentNode) return;
+  clearTimeout(el._timer);
+  el.classList.remove('show');
+  setTimeout(() => el.remove(), 220);
+}
+
 const AVATAR_PALETTE = ['#5B5FEF','#34D399','#F59E0B','#EC4899','#06B6D4','#8B5CF6','#F97316','#10B981'];
 function hashSeed(str){
   let h = 0;
@@ -817,26 +965,6 @@ $('theme-toggle-btn').addEventListener('click', () => {
   localStorage.setItem('wisp-theme', next);
   setThemeIcon();
 });
-
-/* ================= In-app notifications ================= */
-function showNotifBanner({avatar, title, body, onClick}){
-  const stack = $('notif-stack');
-  const el = document.createElement('div');
-  el.className = 'notif-banner';
-  el.innerHTML = `
-    <img src="${avatar}" alt="${escapeHtml(title)}" onerror="window.__avatarFallback(this)">
-    <div class="notif-banner-text">
-      <div class="nname">${escapeHtml(title)}</div>
-      <div class="nbody">${escapeHtml(body)}</div>
-    </div>`;
-  if(onClick) el.addEventListener('click', onClick);
-  stack.appendChild(el);
-  requestAnimationFrame(() => el.classList.add('show'));
-  setTimeout(() => {
-    el.classList.remove('show');
-    setTimeout(() => el.remove(), 250);
-  }, 4500);
-}
 
 /* ================= PWA / notifications ================= */
 let swRegistration = null;
@@ -1349,6 +1477,7 @@ $('group-create-btn').addEventListener('click', async () => {
       lastSenderId: null,
       lastSenderName: null,
       unreadCount: unread,
+      ownerId: currentUser.uid,
       createdBy: currentUser.uid
     });
     $('group-modal').classList.remove('show');
@@ -1396,12 +1525,16 @@ function listenChatList(){
 
       if(snap.empty){
         $('chat-list').innerHTML = `<div class="empty-chats">No conversations yet. Search a username above to say hi, or start a group.</div>`;
+        // If we were sitting in a chat we just got removed from (kicked / group deleted), bounce out.
+        if(activeChatId){ closeActiveChat(); }
         return;
       }
       const rows = [];
+      let stillInActiveChat = !activeChatId;
       for(const doc of snap.docs){
         const chat = doc.data();
         if(!chat.members) continue;
+        if(doc.id === activeChatId) stillInActiveChat = true;
         if(!chat.isGroup){
           const partnerUid = chat.members.find(u => u !== currentUser.uid);
           if(!partnerUid) continue;
@@ -1416,6 +1549,10 @@ function listenChatList(){
         const unread = (chat.unreadCount && chat.unreadCount[currentUser.uid]) || 0;
         const isMine = chat.lastSenderId === currentUser.uid;
         rows.push({id: doc.id, chat, info, unread, isMine});
+      }
+      if(activeChatId && !stillInActiveChat){
+        toast('You were removed from this conversation.');
+        closeActiveChat();
       }
       if(!rows.length){
         $('chat-list').innerHTML = `<div class="empty-chats">No conversations yet. Search a username above to say hi, or start a group.</div>`;
@@ -1452,6 +1589,12 @@ function listenChatList(){
       });
 
       detectNewMessageNotifications(rows);
+
+      // Keep the currently-open chat's header in sync (name/avatar/members changing live).
+      if(activeChatId){
+        const current = rows.find(r => r.id === activeChatId);
+        if(current) syncActiveChatHeader(current.chat);
+      }
     }, err => {
       console.error('Chat list listener error:', err);
       listenerErrorCount++;
@@ -1484,10 +1627,9 @@ function detectNewMessageNotifications(rows){
     if(ms > prev){
       lastSeenTimestamps.set(r.id, ms);
       const notifBody = (r.info.isGroup && r.chat.lastSenderName ? r.chat.lastSenderName + ': ' : '') + (r.chat.lastMessage || 'Sent a photo');
-      showNotifBanner({
-        avatar: r.info.avatar || defaultAvatar(r.info.name),
+      toast(notifBody, {
         title: r.info.name,
-        body: notifBody,
+        avatar: r.info.avatar || defaultAvatar(r.info.name),
         onClick: () => openChat(r.id, r.chat)
       });
       showOsNotification({
@@ -1516,6 +1658,7 @@ function openChat(chatId, chatData){
     name: info.name,
     avatar: info.avatar,
     members: chatData.members,
+    ownerId: chatData.ownerId || chatData.createdBy || null,
     partnerUid: info.partnerUid || null
   };
   activePartner = activeChat.isGroup ? null : userCache.get(activeChat.partnerUid);
@@ -1524,12 +1667,7 @@ function openChat(chatId, chatData){
   $('active-chat-view').style.display = 'flex';
   $('app').classList.add('chat-open');
 
-  $('header-avatar').style.display = activeChat.isGroup && !activeChat.avatar ? 'none' : 'block';
-  withAvatarFallback($('header-avatar'), activeChat.partnerUid || activeChat.name);
-  $('header-avatar').src = activeChat.avatar || defaultAvatar(activeChat.name);
-  $('header-name').textContent = activeChat.name + (activeChat.isGroup ? ` (${activeChat.members.length})` : '');
-  $('header-status').textContent = activeChat.isGroup ? 'Group chat' : '';
-  $('header-status').classList.remove('online');
+  renderActiveChatHeader();
   $('message-input').value = '';
   $('send-btn').disabled = true;
 
@@ -1552,8 +1690,21 @@ function openChat(chatId, chatData){
 
   unsubChatDoc = db.collection('chats').doc(activeChatId).onSnapshot(snap => {
     const chat = snap.exists ? snap.data() : null;
+    if(!chat){
+      // Group was deleted or we lost access.
+      return;
+    }
+    // Keep local activeChat state (members/name/avatar/owner) fresh so the
+    // header, group-info modal, and permission checks (e.g. "am I the owner")
+    // reflect live changes made by other members without needing to reopen.
+    const info2 = chatDisplayInfo(chat);
+    activeChat.members = chat.members;
+    activeChat.name = info2.name;
+    activeChat.avatar = info2.avatar;
+    activeChat.ownerId = chat.ownerId || chat.createdBy || activeChat.ownerId;
+    renderActiveChatHeader();
     renderTyping(chat);
-    if(chat && chat.unreadCount && chat.unreadCount[currentUser.uid]){
+    if(chat.unreadCount && chat.unreadCount[currentUser.uid]){
       db.collection('chats').doc(activeChatId).update({[`unreadCount.${currentUser.uid}`]: 0}).catch(()=>{});
     }
   }, err => console.error('Chat doc listener error:', err));
@@ -1582,6 +1733,58 @@ function openChat(chatId, chatData){
   highlightActiveRow();
 }
 
+function closeActiveChat(){
+  if(unsubChatDoc) unsubChatDoc();
+  if(unsubMessages) unsubMessages();
+  if(unsubPartnerDoc) unsubPartnerDoc();
+  activeChatId = null; activeChat = null; activePartner = null;
+  lastMessageDocsCache = null;
+  $('active-chat-view').style.display = 'none';
+  $('no-chat-state').style.display = 'flex';
+  $('app').classList.remove('chat-open');
+  $('group-info-modal').classList.remove('show');
+  highlightActiveRow();
+}
+
+function renderActiveChatHeader(){
+  $('header-avatar').style.display = activeChat.isGroup && !activeChat.avatar ? 'none' : 'block';
+  $('header-group-avatar').style.display = activeChat.isGroup && !activeChat.avatar ? 'flex' : 'none';
+  if(activeChat.isGroup && !activeChat.avatar){
+    $('header-group-avatar').textContent = initialsOf(activeChat.name);
+  } else {
+    withAvatarFallback($('header-avatar'), activeChat.partnerUid || activeChat.name);
+    $('header-avatar').src = activeChat.avatar || defaultAvatar(activeChat.name);
+  }
+  $('header-name').textContent = activeChat.name + (activeChat.isGroup ? ` (${activeChat.members.length})` : '');
+  if(!activeChat.isGroup){
+    $('header-status').textContent = $('header-status').textContent || '';
+  } else {
+    $('header-status').textContent = 'Group chat';
+    $('header-status').classList.remove('online');
+  }
+  $('group-info-btn').style.display = activeChat.isGroup ? 'flex' : 'none';
+}
+
+// Called from the chat-list snapshot to keep the open chat's header (name,
+// avatar, member count) live-updated when another member edits group info.
+function syncActiveChatHeader(chatData){
+  if(!activeChat) return;
+  const info = chatDisplayInfo(chatData);
+  activeChat.members = chatData.members;
+  activeChat.name = info.name;
+  activeChat.avatar = info.avatar;
+  activeChat.ownerId = chatData.ownerId || chatData.createdBy || activeChat.ownerId;
+  renderActiveChatHeader();
+}
+
+$('chat-header-text').addEventListener('click', () => {
+  if(activeChat && activeChat.isGroup) openGroupInfo();
+});
+$('header-avatar-wrap').addEventListener('click', () => {
+  if(activeChat && activeChat.isGroup) openGroupInfo();
+});
+$('group-info-btn').addEventListener('click', openGroupInfo);
+
 function highlightActiveRow(){
   document.querySelectorAll('.chat-row').forEach(r => r.classList.toggle('active', r.dataset.id === activeChatId));
 }
@@ -1606,6 +1809,17 @@ function renderMessages(messages){
   let lastMine = null;
   let lastSenderId = null;
   messages.forEach(m => {
+    if(m.system){
+      const row = document.createElement('div');
+      row.className = 'msg-row system';
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble system';
+      bubble.textContent = m.text || '';
+      row.appendChild(bubble);
+      wrap.appendChild(row);
+      lastSenderId = null;
+      return;
+    }
     const row = document.createElement('div');
     row.className = 'msg-row ' + (m.senderId === currentUser.uid ? 'sent' : 'received');
     if(activeChat.isGroup && m.senderId !== currentUser.uid && m.senderId !== lastSenderId){
@@ -1616,10 +1830,8 @@ function renderMessages(messages){
     }
     lastSenderId = m.senderId;
     const bubble = document.createElement('div');
-    bubble.className = 'bubble' + (m.photoURL ? ' has-photo' : '') + (m.pending ? ' pending' : '') + (m.failed ? ' failed' : '') + (m.unsent ? ' unsent' : '');
-    if(m.unsent){
-      bubble.textContent = m.senderId === currentUser.uid ? 'You unsent a message' : `${(m.senderName || 'This person').split(' ')[0]} unsent a message`;
-    } else if(m.photoURL){
+    bubble.className = 'bubble' + (m.photoURL ? ' has-photo' : '') + (m.pending ? ' pending' : '') + (m.failed ? ' failed' : '');
+    if(m.photoURL){
       const img = document.createElement('img');
       img.className = 'msg-photo';
       img.src = m.photoURL;
@@ -1639,7 +1851,7 @@ function renderMessages(messages){
     row.appendChild(bubble);
     const time = document.createElement('div');
     time.className = 'msg-time';
-    const canUnsend = m.senderId === currentUser.uid && !m.pending && !m.failed && !m.unsent;
+    const canUnsend = m.senderId === currentUser.uid && !m.pending && !m.failed;
     if(m.failed){
       const retrySpan = document.createElement('span');
       retrySpan.className = 'retry-link';
@@ -1649,8 +1861,6 @@ function renderMessages(messages){
       time.appendChild(retrySpan);
     } else if(m.pending){
       time.textContent = 'Sending…';
-    } else if(m.unsent){
-      time.textContent = fmtTime(m.createdAt);
     } else {
       time.appendChild(document.createTextNode(fmtTime(m.createdAt)));
       if(canUnsend){
@@ -1664,7 +1874,7 @@ function renderMessages(messages){
     }
     row.appendChild(time);
     wrap.appendChild(row);
-    if(m.senderId === currentUser.uid && !m.pending && !m.failed && !m.unsent) lastMine = {m, row, time};
+    if(m.senderId === currentUser.uid && !m.pending && !m.failed) lastMine = {m, row, time};
   });
   if(lastMine && !activeChat.isGroup){
     const read = lastMine.m.readBy && activePartner && lastMine.m.readBy.includes(activePartner.uid);
@@ -1730,17 +1940,15 @@ $('back-btn').addEventListener('click', () => {
   $('app').classList.remove('chat-open');
 });
 
-/* ================= Unsend a message ================= */
+/* ================= Unsend a message (fully deletes it) ================= */
 async function unsendMessage(mid){
   if(!activeChatId || !mid) return;
-  if(!confirm('Unsend this message? This removes it for everyone and can\'t be undone.')) return;
+  if(!confirm('Unsend this message? This removes it completely for everyone and can\'t be undone.')) return;
   const chatId = activeChatId;
   try{
-    await db.collection('chats').doc(chatId).collection('messages').doc(mid).update({
-      unsent: true,
-      text: FieldValue.delete(),
-      photoURL: FieldValue.delete()
-    });
+    // Fully delete the message document — nothing is left behind, unlike a
+    // soft "unsent" placeholder.
+    await db.collection('chats').doc(chatId).collection('messages').doc(mid).delete();
     await refreshChatPreview(chatId);
   }catch(err){
     toast('Could not unsend: ' + err.message);
@@ -1757,11 +1965,11 @@ async function refreshChatPreview(chatId){
       return;
     }
     const last = snap.docs[0].data();
-    const preview = last.unsent ? 'Message unsent' : (last.text || (last.photoURL ? '📷 Photo' : ''));
+    const preview = last.system ? last.text : (last.text || (last.photoURL ? '📷 Photo' : ''));
     await chatRef.update({
       lastMessage: preview,
-      lastSenderId: last.senderId || null,
-      lastSenderName: last.senderName || null
+      lastSenderId: last.system ? null : (last.senderId || null),
+      lastSenderName: last.system ? null : (last.senderName || null)
     });
   }catch(err){
     console.error('Could not refresh chat preview:', err);
@@ -1909,6 +2117,263 @@ async function retryMessage(mid){
     toast('Retry failed: ' + err.message);
   }
 }
+
+/* ================= System messages helper (for group events) ================= */
+async function postSystemMessage(chatId, text){
+  try{
+    const chatRef = db.collection('chats').doc(chatId);
+    const msgRef = chatRef.collection('messages').doc();
+    await msgRef.set({
+      system: true,
+      text,
+      createdAt: FieldValue.serverTimestamp(),
+      readBy: []
+    });
+    await chatRef.set({
+      lastMessage: text,
+      lastMessageAt: FieldValue.serverTimestamp(),
+      lastSenderId: null,
+      lastSenderName: null
+    }, {merge:true});
+  }catch(err){
+    console.error('Could not post system message:', err);
+  }
+}
+
+/* ================= Group info modal ================= */
+function isGroupOwner(){
+  return !!(activeChat && activeChat.isGroup && activeChat.ownerId === currentUser.uid);
+}
+
+async function openGroupInfo(){
+  if(!activeChat || !activeChat.isGroup) return;
+  $('ginfo-name-input').value = activeChat.name;
+  $('ginfo-name-input').disabled = !isGroupOwner() && false; // any member may rename; kept explicit for clarity
+  renderGroupInfoAvatar();
+  await renderGroupInfoMembers();
+  $('group-info-modal').classList.add('show');
+}
+
+function renderGroupInfoAvatar(){
+  const stack = $('ginfo-avatar-stack');
+  const img = $('ginfo-avatar-img');
+  if(activeChat.avatar){
+    stack.style.display = 'none';
+    img.style.display = 'block';
+    img.src = activeChat.avatar;
+    img.alt = activeChat.name;
+  } else {
+    img.style.display = 'none';
+    stack.style.display = 'flex';
+    stack.textContent = initialsOf(activeChat.name);
+  }
+}
+
+async function renderGroupInfoMembers(){
+  const list = $('ginfo-member-list');
+  list.innerHTML = '<div class="result-empty">Loading members…</div>';
+  const members = activeChat.members.slice();
+  const users = [];
+  for(const uid of members){
+    if(userCache.has(uid)){ users.push(userCache.get(uid)); continue; }
+    try{
+      const snap = await db.collection('users').doc(uid).get();
+      if(snap.exists){ userCache.set(uid, snap.data()); users.push(snap.data()); }
+      else users.push({uid, displayName: 'Unknown', username: 'unknown', photoURL: defaultAvatar('?')});
+    }catch(e){
+      users.push({uid, displayName: 'Unknown', username: 'unknown', photoURL: defaultAvatar('?')});
+    }
+  }
+  $('ginfo-members-label').textContent = `Members (${users.length})`;
+  const amOwner = isGroupOwner();
+  list.innerHTML = users.map(u => {
+    const isOwner = u.uid === activeChat.ownerId;
+    const isMe = u.uid === currentUser.uid;
+    const canRemove = amOwner && !isMe;
+    return `
+    <div class="member-row" data-uid="${u.uid}">
+      <img src="${u.photoURL}" alt="${escapeHtml(u.username)}" data-seed="${escapeHtml(u.username)}" onerror="window.__avatarFallback(this)">
+      <span class="mname">${escapeHtml(u.displayName)}${isMe ? ' (you)' : ''}</span>
+      ${isOwner ? '<span class="mtag">Owner</span>' : ''}
+      ${canRemove ? `<button class="remove-member-btn" data-uid="${u.uid}" data-name="${escapeHtml(u.displayName)}" title="Remove from group">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>` : ''}
+    </div>`;
+  }).join('');
+  list.querySelectorAll('.remove-member-btn').forEach(btn => {
+    btn.addEventListener('click', () => removeMemberFromGroup(btn.dataset.uid, btn.dataset.name));
+  });
+}
+
+$('ginfo-close-btn').addEventListener('click', () => $('group-info-modal').classList.remove('show'));
+
+let ginfoAvatarFile = null;
+$('ginfo-avatar-input').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if(!file) return;
+  ginfoAvatarFile = file;
+  const url = URL.createObjectURL(file);
+  $('ginfo-avatar-stack').style.display = 'none';
+  const img = $('ginfo-avatar-img');
+  img.style.display = 'block';
+  img.src = url;
+});
+
+$('ginfo-save-btn').addEventListener('click', async () => {
+  if(!activeChatId || !activeChat || !activeChat.isGroup) return;
+  const btn = $('ginfo-save-btn');
+  const newName = $('ginfo-name-input').value.trim();
+  if(!newName){ toast('Group name can\'t be empty.'); return; }
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try{
+    const update = { groupName: newName };
+    let avatarChanged = false;
+    if(ginfoAvatarFile){
+      update.groupAvatar = await withTimeout(uploadToImgbb(ginfoAvatarFile), 20000, 'Group photo upload');
+      avatarChanged = true;
+    }
+    const nameChanged = newName !== activeChat.name;
+    await db.collection('chats').doc(activeChatId).update(update);
+    activeChat.name = newName;
+    if(avatarChanged) activeChat.avatar = update.groupAvatar;
+    ginfoAvatarFile = null;
+    renderActiveChatHeader();
+    renderGroupInfoAvatar();
+    $('group-info-modal').classList.remove('show');
+    toast('Group updated');
+    if(nameChanged || avatarChanged){
+      const parts = [];
+      if(nameChanged) parts.push(`renamed the group to "${newName}"`);
+      if(avatarChanged) parts.push('changed the group photo');
+      await postSystemMessage(activeChatId, `${myDoc.displayName} ${parts.join(' and ')}`);
+    }
+  }catch(err){
+    toast('Could not save group: ' + err.message);
+  }finally{
+    btn.disabled = false; btn.textContent = 'Save';
+  }
+});
+
+$('ginfo-leave-btn').addEventListener('click', async () => {
+  if(!activeChatId || !activeChat || !activeChat.isGroup) return;
+  if(!confirm(`Leave "${activeChat.name}"? You won't be able to see this conversation anymore.`)) return;
+  const chatId = activeChatId;
+  const leavingOwnerUid = activeChat.ownerId;
+  const remainingMembers = activeChat.members.filter(u => u !== currentUser.uid);
+  try{
+    const update = {
+      members: FieldValue.arrayRemove(currentUser.uid),
+      [`unreadCount.${currentUser.uid}`]: FieldValue.delete(),
+      [`typing.${currentUser.uid}`]: FieldValue.delete()
+    };
+    // If the owner leaves, hand ownership to the next remaining member so
+    // the group isn't left ownerless (which would block removes/renames).
+    if(leavingOwnerUid === currentUser.uid && remainingMembers.length > 0){
+      update.ownerId = remainingMembers[0];
+    }
+    await db.collection('chats').doc(chatId).update(update);
+    await postSystemMessage(chatId, `${myDoc.displayName} left the group`);
+    $('group-info-modal').classList.remove('show');
+    closeActiveChat();
+    toast('You left the group.');
+  }catch(err){
+    toast('Could not leave group: ' + err.message);
+  }
+});
+
+async function removeMemberFromGroup(uid, name){
+  if(!activeChatId || !activeChat || !isGroupOwner()) return;
+  if(!confirm(`Remove ${name} from the group?`)) return;
+  try{
+    await db.collection('chats').doc(activeChatId).update({
+      members: FieldValue.arrayRemove(uid),
+      [`unreadCount.${uid}`]: FieldValue.delete(),
+      [`typing.${uid}`]: FieldValue.delete()
+    });
+    await postSystemMessage(activeChatId, `${myDoc.displayName} removed ${name} from the group`);
+    toast(`Removed ${name}`);
+    await renderGroupInfoMembers();
+  }catch(err){
+    toast('Could not remove member: ' + err.message);
+  }
+}
+
+/* ---- Add members (from group info) ---- */
+let addMemberSelected = new Map();
+let addMemberSearchDebounce = null;
+
+$('ginfo-add-member-btn').addEventListener('click', () => {
+  addMemberSelected.clear();
+  $('add-member-search-input').value = '';
+  $('add-member-picker-list').innerHTML = '<div class="result-empty">Search for people to add.</div>';
+  $('add-member-confirm-btn').disabled = true;
+  $('add-member-modal').classList.add('show');
+});
+$('add-member-cancel-btn').addEventListener('click', () => $('add-member-modal').classList.remove('show'));
+
+$('add-member-search-input').addEventListener('input', (e) => {
+  clearTimeout(addMemberSearchDebounce);
+  const q = e.target.value.trim().toLowerCase();
+  if(!q){ renderAddMemberPicker([]); return; }
+  addMemberSearchDebounce = setTimeout(async () => {
+    try{
+      const snap = await db.collection('users')
+        .where('usernameLower', '>=', q)
+        .where('usernameLower', '<=', q + '\uf8ff')
+        .limit(8).get();
+      const results = snap.docs.map(d => d.data())
+        .filter(u => u.uid !== currentUser.uid && !activeChat.members.includes(u.uid));
+      renderAddMemberPicker(results);
+    }catch(err){
+      $('add-member-picker-list').innerHTML = `<div class="result-empty">Search failed: ${escapeHtml(err.message)}</div>`;
+    }
+  }, 300);
+});
+function renderAddMemberPicker(results){
+  const list = $('add-member-picker-list');
+  if(!results.length && addMemberSelected.size === 0){
+    list.innerHTML = '<div class="result-empty">Search for people to add.</div>';
+    return;
+  }
+  const merged = new Map();
+  addMemberSelected.forEach((u, uid) => merged.set(uid, u));
+  results.forEach(u => merged.set(u.uid, u));
+  list.innerHTML = [...merged.values()].map(u => `
+    <label class="group-picker-row">
+      <img src="${u.photoURL}" alt="${escapeHtml(u.username)}" data-seed="${escapeHtml(u.username)}" onerror="window.__avatarFallback(this)">
+      <span class="gname">${escapeHtml(u.displayName)}</span>
+      <input type="checkbox" data-uid="${u.uid}" ${addMemberSelected.has(u.uid) ? 'checked' : ''}>
+    </label>`).join('');
+  list.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const u = merged.get(cb.dataset.uid);
+      if(cb.checked) addMemberSelected.set(u.uid, u);
+      else addMemberSelected.delete(u.uid);
+      $('add-member-confirm-btn').disabled = addMemberSelected.size === 0;
+    });
+  });
+}
+$('add-member-confirm-btn').addEventListener('click', async () => {
+  if(!activeChatId || !activeChat || addMemberSelected.size === 0) return;
+  const btn = $('add-member-confirm-btn');
+  btn.disabled = true; btn.textContent = 'Adding…';
+  try{
+    const newUids = [...addMemberSelected.keys()];
+    const update = { members: FieldValue.arrayUnion(...newUids) };
+    newUids.forEach(uid => { update[`unreadCount.${uid}`] = 0; });
+    addMemberSelected.forEach(u => userCache.set(u.uid, u));
+    await db.collection('chats').doc(activeChatId).update(update);
+    const names = [...addMemberSelected.values()].map(u => u.displayName).join(', ');
+    await postSystemMessage(activeChatId, `${myDoc.displayName} added ${names}`);
+    $('add-member-modal').classList.remove('show');
+    toast('People added to the group');
+    await renderGroupInfoMembers();
+  }catch(err){
+    toast('Could not add people: ' + err.message);
+  }finally{
+    btn.disabled = false; btn.textContent = 'Add';
+  }
+});
 
 /* ================= Profile modal ================= */
 let modalAvatarFile = null;
