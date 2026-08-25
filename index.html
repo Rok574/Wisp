@@ -711,18 +711,6 @@
   </div>
 </div>
 
-<!-- CONFIRM MODAL (replaces native confirm()) -->
-<div class="modal-backdrop" id="confirm-modal">
-  <div class="modal" style="gap:14px;">
-    <h3 id="confirm-title">Are you sure?</h3>
-    <p id="confirm-message" style="color:var(--ink-soft); font-size:13.5px; line-height:1.5;"></p>
-    <div class="modal-actions">
-      <button class="ghost-btn" id="confirm-cancel-btn">Cancel</button>
-      <button class="ghost-btn danger-btn" id="confirm-ok-btn">Confirm</button>
-    </div>
-  </div>
-</div>
-
 <div class="toast-stack" id="toast-stack"></div>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -748,7 +736,6 @@ const FieldValue = firebase.firestore.FieldValue;
 db.enableNetwork().catch(() => {});
 
 const PROXY_URL = "https://script.google.com/macros/s/AKfycbwv-bw-7N8NSC1wFNs0e8VFQGyAHaNRhkRTguIbaZ42pTLFWcsak-ezNLVa0p4wD_OL/exec";
-const PROXY_URL_HOST = PROXY_URL.split('/exec')[0]; // used to detect our own proxied image URLs vs. anything else
 
 async function uploadToImgbb(file) {
   if (!file.type || !file.type.startsWith('image/')) {
@@ -775,9 +762,8 @@ async function uploadToImgbb(file) {
   const safeName = (file.name && file.name.trim()) ? file.name.trim() : `img_${Date.now()}.${extFromType}`;
 
   try {
-    // Upload the image to Catbox via the proxy (text/plain avoids a CORS
-    // preflight OPTIONS request, which Apps Script doesn't handle).
-    const uploadResponse = await fetch(PROXY_URL, {
+    // text/plain prevents browser preflight (OPTIONS) requests that Apps Script blocks
+    const response = await fetch(PROXY_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({
@@ -788,77 +774,18 @@ async function uploadToImgbb(file) {
       redirect: 'follow'
     });
 
-    if (!uploadResponse.ok) {
-      throw new Error(`HTTP error! Status: ${uploadResponse.status}`);
+    if (!response.ok) {
+      throw new Error(`HTTP error! Status: ${response.status}`);
     }
 
-    const uploadData = await uploadResponse.json();
+    const data = await response.json();
 
-    if (!uploadData.success) {
-      const msg = (uploadData.error && uploadData.error.message) ? uploadData.error.message : (uploadData.error || 'Upload failed');
+    if (!data.success) {
+      const msg = (data.error && data.error.message) ? data.error.message : (data.error || 'Upload failed');
       throw new Error(msg);
     }
 
-    // We only store the small proxied URL string in Firestore — not the
-    // image itself. Fetching + base64-decoding it happens later, in the
-    // browser, only when something actually needs to display it (see
-    // resolveImageSrc below). This keeps every Firestore document tiny
-    // regardless of how many/large the photos in a chat are.
-    const proxiedUrl = uploadData.data.url;
-    if (proxiedUrl) return proxiedUrl;
-
-    // Fallback for older proxy responses that returned a direct URL.
-    return uploadData.data.display_url || uploadData.data.originalCatboxUrl;
-
-  } catch (err) {
-    throw new Error(`Wisp upload proxy error: ${err.message}`);
-  }
-}
-
-/* ---- Resolve a stored image URL into something an <img> can render ----
-   Firestore only ever holds the small proxied URL string. The proxy itself
-   can't stream raw binary back over HTTP (Apps Script's ContentService is
-   text-only), so hitting the URL returns {success, data:{base64,mimeType}}
-   JSON instead. This resolves that into a data: URI, in-memory, on demand —
-   with a cache so the same image isn't re-fetched/re-decoded repeatedly. */
-const imageSrcCache = new Map(); // proxiedUrl -> data: URI (or Promise while in flight)
-function resolveImageSrc(url){
-  if (!url) return Promise.resolve(url);
-  if (!url.includes(PROXY_URL_HOST)) return Promise.resolve(url); // not one of our proxied URLs — use as-is
-  if (imageSrcCache.has(url)) return Promise.resolve(imageSrcCache.get(url));
-
-  const p = (async () => {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`Could not retrieve image (status ${res.status}).`);
-    const data = await res.json();
-    if (!data.success || !data.data || !data.data.base64) {
-      throw new Error((data.error && data.error.toString()) || 'Image could not be decoded.');
-    }
-    const dataUri = `data:${data.data.mimeType || 'image/jpeg'};base64,${data.data.base64}`;
-    imageSrcCache.set(url, dataUri);
-    return dataUri;
-  })();
-
-  imageSrcCache.set(url, p); // cache the in-flight promise too, so concurrent callers share one fetch
-  return p;
-}
-// Sets an <img>'s src by resolving it through the proxy if needed. Shows a
-// tiny inline placeholder color while resolving so layout doesn't jump.
-function setResolvedImgSrc(imgEl, url, fallbackSeed){
-  if (!imgEl || !url) return;
-  imgEl.src = url; // optimistic: works immediately for non-proxied/data: URIs
-  Promise.resolve(resolveImageSrc(url)).then(resolved => {
-    if (resolved && resolved !== url) imgEl.src = resolved;
-  }).catch(err => {
-    console.error('Image resolve failed:', err);
-    window.__avatarFallback ? imgEl.dispatchEvent(new Event('error')) : null;
-  });
-}
-    const fetchData = await fetchResponse.json();
-    if (!fetchData.success || !fetchData.data || !fetchData.data.base64) {
-      throw new Error((fetchData.error && fetchData.error.toString()) || 'Uploaded image could not be decoded.');
-    }
-    return `data:${fetchData.data.mimeType || file.type};base64,${fetchData.data.base64}`;
+    return data.data.url || data.data.display_url || data.data.originalCatboxUrl;
 
   } catch (err) {
     throw new Error(`Wisp upload proxy error: ${err.message}`);
@@ -913,36 +840,6 @@ function removeToast(el){
   clearTimeout(el._timer);
   el.classList.remove('show');
   setTimeout(() => el.remove(), 220);
-}
-
-/* ---- Custom confirm dialog (replaces native confirm()/alert()) ---- */
-function confirmDialog(message, opts){
-  opts = opts || {};
-  return new Promise((resolve) => {
-    $('confirm-title').textContent = opts.title || 'Are you sure?';
-    $('confirm-message').textContent = message;
-    $('confirm-ok-btn').textContent = opts.confirmLabel || 'Confirm';
-    const backdrop = $('confirm-modal');
-    const okBtn = $('confirm-ok-btn');
-    const cancelBtn = $('confirm-cancel-btn');
-    let settled = false;
-    function cleanup(result){
-      if(settled) return;
-      settled = true;
-      backdrop.classList.remove('show');
-      okBtn.removeEventListener('click', onOk);
-      cancelBtn.removeEventListener('click', onCancel);
-      backdrop.removeEventListener('click', onBackdrop);
-      resolve(result);
-    }
-    function onOk(){ cleanup(true); }
-    function onCancel(){ cleanup(false); }
-    function onBackdrop(e){ if(e.target === backdrop) cleanup(false); }
-    okBtn.addEventListener('click', onOk);
-    cancelBtn.addEventListener('click', onCancel);
-    backdrop.addEventListener('click', onBackdrop);
-    backdrop.classList.add('show');
-  });
 }
 
 const AVATAR_PALETTE = ['#5B5FEF','#34D399','#F59E0B','#EC4899','#06B6D4','#8B5CF6','#F97316','#10B981'];
@@ -2046,8 +1943,7 @@ $('back-btn').addEventListener('click', () => {
 /* ================= Unsend a message (fully deletes it) ================= */
 async function unsendMessage(mid){
   if(!activeChatId || !mid) return;
-  const ok = await confirmDialog('This removes it completely for everyone and can\'t be undone.', {title: 'Unsend this message?', confirmLabel: 'Unsend'});
-  if(!ok) return;
+  if(!confirm('Unsend this message? This removes it completely for everyone and can\'t be undone.')) return;
   const chatId = activeChatId;
   try{
     // Fully delete the message document — nothing is left behind, unlike a
@@ -2360,8 +2256,7 @@ $('ginfo-save-btn').addEventListener('click', async () => {
 
 $('ginfo-leave-btn').addEventListener('click', async () => {
   if(!activeChatId || !activeChat || !activeChat.isGroup) return;
-  const ok = await confirmDialog(`You won't be able to see this conversation anymore.`, {title: `Leave "${activeChat.name}"?`, confirmLabel: 'Leave'});
-  if(!ok) return;
+  if(!confirm(`Leave "${activeChat.name}"? You won't be able to see this conversation anymore.`)) return;
   const chatId = activeChatId;
   const leavingOwnerUid = activeChat.ownerId;
   const remainingMembers = activeChat.members.filter(u => u !== currentUser.uid);
@@ -2388,8 +2283,7 @@ $('ginfo-leave-btn').addEventListener('click', async () => {
 
 async function removeMemberFromGroup(uid, name){
   if(!activeChatId || !activeChat || !isGroupOwner()) return;
-  const ok = await confirmDialog(`They'll lose access to this group's messages.`, {title: `Remove ${name} from the group?`, confirmLabel: 'Remove'});
-  if(!ok) return;
+  if(!confirm(`Remove ${name} from the group?`)) return;
   try{
     await db.collection('chats').doc(activeChatId).update({
       members: FieldValue.arrayRemove(uid),
