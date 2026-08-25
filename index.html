@@ -450,6 +450,28 @@
     width:26px; height:26px; border-radius:50%; background:var(--accent-soft); display:flex; align-items:center; justify-content:center; flex-shrink:0;
   }
   .add-member-btn .plus-circle svg{width:14px; height:14px;}
+  /* Container to hold the floating toasts */
+#toast-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 9999;
+}
+
+
+/* Toast action buttons */
+.toast-btn {
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+}
+.toast-btn-confirm { background: #ff4d4f; color: #fff; }
+.toast-btn-cancel { background: #444; color: #fff; }
 </style>
 </head>
 <body>
@@ -531,6 +553,7 @@
 
 <!-- APP -->
 <div id="app">
+  <div id="toast-container"></div>
   <div class="shell">
     <aside class="sidebar">
       <div class="sidebar-header">
@@ -1940,21 +1963,49 @@ $('back-btn').addEventListener('click', () => {
   $('app').classList.remove('chat-open');
 });
 
-/* ================= Unsend a message (fully deletes it) ================= */
-async function unsendMessage(mid){
-  if(!activeChatId || !mid) return;
-  if(!confirm('Unsend this message? This removes it completely for everyone and can\'t be undone.')) return;
-  const chatId = activeChatId;
-  try{
-    // Fully delete the message document — nothing is left behind, unlike a
-    // soft "unsent" placeholder.
-    await db.collection('chats').doc(chatId).collection('messages').doc(mid).delete();
-    await refreshChatPreview(chatId);
-  }catch(err){
-    toast('Could not unsend: ' + err.message);
-  }
+// Add these two custom toast functions
+function toast(message, duration = 3000) {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+  const el = document.createElement('div');
+  el.className = 'toast-popup';
+  el.textContent = message;
+  container.appendChild(el);
+  setTimeout(() => el.remove(), duration);
 }
 
+function toastConfirm(message, onConfirm) {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+  const el = document.createElement('div');
+  el.className = 'toast-popup';
+  el.innerHTML = `
+    <span>${message}</span>
+    <button class="toast-btn toast-btn-confirm">Unsend</button>
+    <button class="toast-btn toast-btn-cancel">Cancel</button>
+  `;
+  container.appendChild(el);
+
+  el.querySelector('.toast-btn-confirm').onclick = () => { el.remove(); onConfirm(); };
+  el.querySelector('.toast-btn-cancel').onclick = () => el.remove();
+}
+
+/* ================= Updated unsendMessage Function ================= */
+async function unsendMessage(mid){
+  if(!activeChatId || !mid) return;
+  
+  toastConfirm('Unsend this message completely?', async () => {
+    const chatId = activeChatId;
+    try{
+      await db.collection('chats').doc(chatId).collection('messages').doc(mid).delete();
+      await refreshChatPreview(chatId);
+      toast('Message unsent');
+    }catch(err){
+      toast('Could not unsend: ' + err.message);
+    }
+  });
+}
+  
 async function refreshChatPreview(chatId){
   try{
     const snap = await db.collection('chats').doc(chatId).collection('messages')
