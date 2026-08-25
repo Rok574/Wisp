@@ -735,34 +735,34 @@ const FieldValue = firebase.firestore.FieldValue;
 
 db.enableNetwork().catch(() => {});
 
-const PROXY_URL = "https://script.google.com/macros/s/AKfycbwv-bw-7N8NSC1wFNs0e8VFQGyAHaNRhkRTguIbaZ42pTLFWcsak-ezNLVa0p4wD_OL/exec";
+const PROXY_URL = "https://script.google.com/macros/s/AKfycbx1AlxWEdXqRt4FaEocTUmuvVGew50naml8Ot4M-wWxmUfksRdnJx9a98beRNTCHwNB8Q/exec";
 
 async function uploadToImgbb(file) {
-  if (!file.type || !file.type.startsWith('image/')) {
+  if (!file || !file.type || !file.type.startsWith('image/')) {
     throw new Error('Please select a valid image file.');
   }
 
-  // Wisp proxies can struggle with large payloads, keep uploads sensible
-  if (file.size > 16 * 1024 * 1024) {
-    throw new Error('Image size exceeds 16MB limit for proxy transmission.');
+  // Apps Script crashes above ~35MB due to Base64 size expansion (50MB limit)
+  const MAX_SIZE_MB = 35;
+  if (file.size > MAX_SIZE_MB * 1024 * 1024) {
+    throw new Error(`Image size exceeds ${MAX_SIZE_MB}MB limit for Apps Script proxy.`);
   }
 
-  // Convert File to raw Base64 string
+  // Fast Async Base64 Conversion
   const base64Image = await new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onload = () => {
+      const result = reader.result;
+      resolve(result.substring(result.indexOf(',') + 1));
+    };
     reader.onerror = (err) => reject(err);
     reader.readAsDataURL(file);
   });
 
-  // Derive a safe filename/extension from the original file, since the
-  // Catbox-backed proxy uses these to build the uploaded blob and its
-  // proxied URL (defaults to .jpg if omitted).
   const extFromType = (file.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
   const safeName = (file.name && file.name.trim()) ? file.name.trim() : `img_${Date.now()}.${extFromType}`;
 
   try {
-    // text/plain prevents browser preflight (OPTIONS) requests that Apps Script blocks
     const response = await fetch(PROXY_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -785,10 +785,10 @@ async function uploadToImgbb(file) {
       throw new Error(msg);
     }
 
-    return data.data.url || data.data.display_url || data.data.originalCatboxUrl;
+    return data.data.url;
 
   } catch (err) {
-    throw new Error(`Wisp upload proxy error: ${err.message}`);
+    throw new Error(`Upload proxy error: ${err.message}`);
   }
 }
 
