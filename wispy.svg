@@ -17,13 +17,7 @@
     try {
       const url = decodeURIComponent("${safeUrl}");
     
-      fetch(url, {
-        cache: 'no-store',
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache'
-        }
-      })
+fetch(url, { cache: 'no-store' })
       .then(response => response.text())
       .then(html => {
         document.open();
