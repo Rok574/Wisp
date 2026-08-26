@@ -233,6 +233,7 @@
     transition:background .12s ease; position:relative;
   }
   .chat-row:hover{background:var(--bg);}
+  .chat-row:hover .chat-close-btn{opacity:1;}
   .chat-row.active{background:var(--accent-soft);}
   .chat-avatar-wrap{position:relative; flex-shrink:0;}
   .chat-row img{width:46px; height:46px; border-radius:50%; object-fit:cover;}
@@ -250,6 +251,13 @@
     background:var(--accent); color:#fff; font-size:11px; font-weight:700; min-width:18px; height:18px;
     border-radius:9px; display:flex; align-items:center; justify-content:center; padding:0 5px; flex-shrink:0;
   }
+  .chat-close-btn{
+    opacity:0; flex-shrink:0; width:26px; height:26px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center; color:var(--ink-faint);
+    transition:opacity .12s ease, background .12s ease, color .12s ease;
+  }
+  .chat-close-btn:hover{background:var(--surface); color:var(--danger);}
+  .chat-close-btn svg{width:14px; height:14px;}
   .empty-chats{padding:40px 24px; text-align:center; color:var(--ink-faint); font-size:13px; line-height:1.6;}
 
   /* Chat area */
@@ -601,6 +609,9 @@
             <div class="hname" id="header-name">—</div>
             <div class="hstatus" id="header-status">—</div>
           </div>
+          <button class="icon-btn" id="close-dm-btn" title="Close conversation" style="display:none;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
           <button class="icon-btn info-btn" id="group-info-btn" title="Group info" style="display:none;">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
           </button>
@@ -729,6 +740,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 
 <script>
 /* ================= Firebase init ================= */
@@ -739,11 +751,15 @@ const firebaseConfig = {
   storageBucket: "imessage-59122.firebasestorage.app",
   messagingSenderId: "32627041423",
   appId: "1:32627041423:web:9671907c64c06c06e77cfa",
-  measurementId: "G-H9XQZ5YML6"
+  measurementId: "G-H9XQZ5YML6",
+  // If your project's Realtime Database is in a non-default region, set the
+  // explicit databaseURL here, e.g. "https://imessage-59122-default-rtdb.firebaseio.com"
+  databaseURL: "https://imessage-59122-default-rtdb.firebaseio.com"
 };
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
+const rtdb = firebase.database();
 const FieldValue = firebase.firestore.FieldValue;
 
 db.enableNetwork().catch(() => {});
@@ -951,6 +967,53 @@ let searchDebounce = null;
 let chatListFirstLoad = true;
 let lastSeenTimestamps = new Map();
 let lastMessageDocsCache = null;
+
+/*
+ * ================= RTDB signal layer =================
+ * Realtime Database is used ONLY as a low-latency signaling channel:
+ *   /pings/{chatId}         -> {at, from}      "a new message landed in this chat, go check Firestore"
+ *   /typing/{chatId}/{uid}  -> bool             live typing indicator
+ *   /reads/{chatId}/{uid}   -> serverTimestamp   per-user "I've read up to this moment" marker
+ *   /presence/{uid}         -> {online, lastSeen}
+ *
+ * No message content or chat metadata lives in RTDB — Firestore stays the
+ * single source of truth for that. RTDB just tells listeners "something
+ * changed, go look NOW" without waiting on Firestore's snapshot fan-out,
+ * which is what makes the UI feel instant. Actual message bodies still
+ * commit to Firestore as before.
+ */
+let rtdbPingRefs = new Map();      // chatId -> ref, for chats currently rendered in the sidebar
+let unsubActivePing = null;
+let unsubActiveTyping = null;
+let unsubActiveReads = null;
+let presenceRef = null;
+
+function pingChat(chatId, extra){
+  // Fire-and-forget: don't await, don't block the send path on this.
+  rtdb.ref('pings/' + chatId).set(Object.assign({
+    at: firebase.database.ServerValue.TIMESTAMP
+  }, extra || {})).catch(()=>{});
+}
+
+function setupPresence(){
+  if(!currentUser) return;
+  presenceRef = rtdb.ref('presence/' + currentUser.uid);
+  const connectedRef = rtdb.ref('.info/connected');
+  connectedRef.on('value', (snap) => {
+    if(snap.val() === true){
+      presenceRef.onDisconnect().set({ online: false, lastSeen: firebase.database.ServerValue.TIMESTAMP });
+      presenceRef.set({ online: true, lastSeen: firebase.database.ServerValue.TIMESTAMP });
+    }
+  });
+}
+function teardownPresence(){
+  if(presenceRef){
+    presenceRef.onDisconnect().cancel().catch(()=>{});
+    presenceRef.set({ online: false, lastSeen: firebase.database.ServerValue.TIMESTAMP }).catch(()=>{});
+  }
+  rtdb.ref('.info/connected').off();
+  presenceRef = null;
+}
 
 /* ================= Connection status (quiet) ================= */
 let listenerErrorCount = 0;
@@ -1311,6 +1374,7 @@ function enterApp(){
   $('app').style.display = 'block';
   renderMe();
   startHeartbeat();
+  setupPresence();
   listenChatList();
   attachComposerHandlers();
   initNotifications();
@@ -1339,6 +1403,9 @@ function teardownApp(){
   if(unsubMessages) unsubMessages();
   if(unsubChatDoc) unsubChatDoc();
   if(unsubPartnerDoc) unsubPartnerDoc();
+  detachActiveRtdbSignals();
+  detachSidebarPings();
+  teardownPresence();
   userCache.clear();
   activeChatId = null; activeChat = null; activePartner = null;
   chatListFirstLoad = true;
@@ -1522,6 +1589,44 @@ function chatDisplayInfo(chat){
   };
 }
 
+/* Attach/detach RTDB "new message" pings for every chat row in the sidebar,
+   so the chat list can react to a new message the instant it lands, rather
+   than waiting on the Firestore chats-listener snapshot alone. The Firestore
+   listener is still what actually re-renders the row (it has the real
+   preview text/unread count) — the RTDB ping is just what makes it re-check
+   sooner instead of waiting for Firestore's own propagation. */
+function detachSidebarPings(){
+  rtdbPingRefs.forEach((ref) => ref.off());
+  rtdbPingRefs.clear();
+}
+function syncSidebarPings(chatIds){
+  const wanted = new Set(chatIds);
+  // remove pings for chats no longer in the list
+  rtdbPingRefs.forEach((ref, chatId) => {
+    if(!wanted.has(chatId)){ ref.off(); rtdbPingRefs.delete(chatId); }
+  });
+  // add pings for new chats
+  wanted.forEach((chatId) => {
+    if(rtdbPingRefs.has(chatId)) return;
+    const ref = rtdb.ref('pings/' + chatId);
+    ref.on('value', (snap) => {
+      const val = snap.val();
+      if(!val || !val.at) return;
+      // A ping fired from someone else means: don't wait for the Firestore
+      // chat-list snapshot, go grab the latest chat doc right now.
+      if(val.from && val.from === currentUser.uid) return;
+      db.collection('chats').doc(chatId).get().then((docSnap) => {
+        if(docSnap.exists) refreshSingleChatRow(chatId, docSnap.data());
+      }).catch(()=>{});
+    });
+    rtdbPingRefs.set(chatId, ref);
+  });
+}
+
+// Cache of the last rendered row data, keyed by chatId, so a ping-triggered
+// refresh of one row doesn't require re-rendering the whole list.
+let chatRowCache = new Map();
+
 function listenChatList(){
   if(unsubChatList) unsubChatList();
   // Only suppress notifications on the very first-ever load (before we have
@@ -1537,8 +1642,10 @@ function listenChatList(){
       listenerErrorCount = 0;
 
       if(snap.empty){
+        chatRowCache.clear();
+        detachSidebarPings();
         $('chat-list').innerHTML = `<div class="empty-chats">No conversations yet. Search a username above to say hi, or start a group.</div>`;
-        // If we were sitting in a chat we just got removed from (kicked / group deleted), bounce out.
+        // If we were sitting in a chat we just got removed from (kicked / group deleted / DM closed), bounce out.
         if(activeChatId){ closeActiveChat(); }
         return;
       }
@@ -1564,43 +1671,18 @@ function listenChatList(){
         rows.push({id: doc.id, chat, info, unread, isMine});
       }
       if(activeChatId && !stillInActiveChat){
-        toast('You were removed from this conversation.');
+        toast('This conversation is no longer available.');
         closeActiveChat();
       }
       if(!rows.length){
+        chatRowCache.clear();
+        detachSidebarPings();
         $('chat-list').innerHTML = `<div class="empty-chats">No conversations yet. Search a username above to say hi, or start a group.</div>`;
         return;
       }
-      rows.sort((a, b) => {
-        const aMs = a.chat.lastMessageAt && a.chat.lastMessageAt.toMillis ? a.chat.lastMessageAt.toMillis() : Date.now();
-        const bMs = b.chat.lastMessageAt && b.chat.lastMessageAt.toMillis ? b.chat.lastMessageAt.toMillis() : Date.now();
-        return bMs - aMs;
-      });
-      $('chat-list').innerHTML = rows.map(r => `
-        <div class="chat-row ${r.id===activeChatId?'active':''}" data-id="${r.id}">
-          <div class="chat-avatar-wrap">
-            ${r.info.isGroup
-              ? `<div class="group-avatar-stack">${r.info.avatar ? `<img src="${r.info.avatar}" alt="${escapeHtml(r.info.name)}" onerror="this.remove()">` : initialsOf(r.info.name)}</div>`
-              : `<img src="${r.info.avatar}" alt="${escapeHtml(r.info.name)}" data-seed="${escapeHtml(r.info.partnerUid || r.info.name)}" onerror="window.__avatarFallback(this)">`}
-          </div>
-          <div class="chat-row-text">
-            <div class="chat-row-top">
-              <div class="cname">${escapeHtml(r.info.name)}${r.info.isGroup ? '<span class="group-badge">Group</span>' : ''}</div>
-              <div class="ctime">${fmtDayTime(r.chat.lastMessageAt)}</div>
-            </div>
-            <div class="chat-row-bottom">
-              <div class="cpreview">${r.isMine ? 'You: ' : (r.info.isGroup && r.chat.lastSenderName ? escapeHtml(r.chat.lastSenderName) + ': ' : '')}${escapeHtml(r.chat.lastMessage || (r.chat.lastSenderId ? 'Photo' : 'Say hi 👋'))}</div>
-              ${r.unread ? `<div class="unread-badge">${r.unread}</div>` : ''}
-            </div>
-          </div>
-        </div>`).join('');
-      $('chat-list').querySelectorAll('.chat-row').forEach(row => {
-        row.addEventListener('click', () => {
-          const r = rows.find(x => x.id === row.dataset.id);
-          openChat(r.id, r.chat);
-        });
-      });
-
+      rows.forEach(r => chatRowCache.set(r.id, r));
+      renderChatList(rows);
+      syncSidebarPings(rows.map(r => r.id));
       detectNewMessageNotifications(rows);
 
       // Keep the currently-open chat's header in sync (name/avatar/members changing live).
@@ -1621,6 +1703,59 @@ function listenChatList(){
       const delay = Math.min(2000 * listenerErrorCount, 15000);
       setTimeout(() => { if(currentUser) listenChatList(); }, delay);
     });
+}
+
+function renderChatList(rows){
+  rows.sort((a, b) => {
+    const aMs = a.chat.lastMessageAt && a.chat.lastMessageAt.toMillis ? a.chat.lastMessageAt.toMillis() : Date.now();
+    const bMs = b.chat.lastMessageAt && b.chat.lastMessageAt.toMillis ? b.chat.lastMessageAt.toMillis() : Date.now();
+    return bMs - aMs;
+  });
+  $('chat-list').innerHTML = rows.map(r => `
+    <div class="chat-row ${r.id===activeChatId?'active':''}" data-id="${r.id}">
+      <div class="chat-avatar-wrap">
+        ${r.info.isGroup
+          ? `<div class="group-avatar-stack">${r.info.avatar ? `<img src="${r.info.avatar}" alt="${escapeHtml(r.info.name)}" onerror="this.remove()">` : initialsOf(r.info.name)}</div>`
+          : `<img src="${r.info.avatar}" alt="${escapeHtml(r.info.name)}" data-seed="${escapeHtml(r.info.partnerUid || r.info.name)}" onerror="window.__avatarFallback(this)">`}
+      </div>
+      <div class="chat-row-text">
+        <div class="chat-row-top">
+          <div class="cname">${escapeHtml(r.info.name)}${r.info.isGroup ? '<span class="group-badge">Group</span>' : ''}</div>
+          <div class="ctime">${fmtDayTime(r.chat.lastMessageAt)}</div>
+        </div>
+        <div class="chat-row-bottom">
+          <div class="cpreview">${r.isMine ? 'You: ' : (r.info.isGroup && r.chat.lastSenderName ? escapeHtml(r.chat.lastSenderName) + ': ' : '')}${escapeHtml(r.chat.lastMessage || (r.chat.lastSenderId ? 'Photo' : 'Say hi 👋'))}</div>
+          ${r.unread ? `<div class="unread-badge">${r.unread}</div>` : ''}
+        </div>
+      </div>
+      ${!r.info.isGroup ? `<button class="chat-close-btn" data-close-id="${r.id}" data-close-name="${escapeHtml(r.info.name)}" title="Close conversation">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>` : ''}
+    </div>`).join('');
+  $('chat-list').querySelectorAll('.chat-row').forEach(row => {
+    row.addEventListener('click', (e) => {
+      if(e.target.closest('.chat-close-btn')) return;
+      const r = rows.find(x => x.id === row.dataset.id);
+      openChat(r.id, r.chat);
+    });
+  });
+  $('chat-list').querySelectorAll('.chat-close-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeDm(btn.dataset.closeId, btn.dataset.closeName);
+    });
+  });
+}
+
+// Re-render just the one row that got pinged, using a fresh Firestore read,
+// without waiting for the whole chats-listener snapshot to arrive.
+function refreshSingleChatRow(chatId, chat){
+  if(!chat || !chat.members) return;
+  const info = chatDisplayInfo(chat);
+  const unread = (chat.unreadCount && chat.unreadCount[currentUser.uid]) || 0;
+  const isMine = chat.lastSenderId === currentUser.uid;
+  chatRowCache.set(chatId, {id: chatId, chat, info, unread, isMine});
+  renderChatList([...chatRowCache.values()]);
 }
 
 function detectNewMessageNotifications(rows){
@@ -1658,6 +1793,12 @@ function detectNewMessageNotifications(rows){
 }
 
 /* ================= Active chat ================= */
+function detachActiveRtdbSignals(){
+  if(unsubActivePing){ unsubActivePing(); unsubActivePing = null; }
+  if(unsubActiveTyping){ unsubActiveTyping(); unsubActiveTyping = null; }
+  if(unsubActiveReads){ unsubActiveReads(); unsubActiveReads = null; }
+}
+
 function openChat(chatId, chatData){
   clearTimeout(typingTimeout);
   isCurrentlyTyping = false;
@@ -1679,6 +1820,7 @@ function openChat(chatId, chatData){
   $('no-chat-state').style.display = 'none';
   $('active-chat-view').style.display = 'flex';
   $('app').classList.add('chat-open');
+  $('close-dm-btn').style.display = activeChat.isGroup ? 'none' : 'flex';
 
   renderActiveChatHeader();
   $('message-input').value = '';
@@ -1687,6 +1829,7 @@ function openChat(chatId, chatData){
   if(unsubChatDoc) unsubChatDoc();
   if(unsubMessages) unsubMessages();
   if(unsubPartnerDoc) unsubPartnerDoc();
+  detachActiveRtdbSignals();
 
   if(!activeChat.isGroup && activeChat.partnerUid){
     unsubPartnerDoc = db.collection('users').doc(activeChat.partnerUid).onSnapshot(snap => {
@@ -1704,7 +1847,7 @@ function openChat(chatId, chatData){
   unsubChatDoc = db.collection('chats').doc(activeChatId).onSnapshot(snap => {
     const chat = snap.exists ? snap.data() : null;
     if(!chat){
-      // Group was deleted or we lost access.
+      // Group was deleted, DM was closed, or we lost access.
       return;
     }
     // Keep local activeChat state (members/name/avatar/owner) fresh so the
@@ -1716,7 +1859,6 @@ function openChat(chatId, chatData){
     activeChat.avatar = info2.avatar;
     activeChat.ownerId = chat.ownerId || chat.createdBy || activeChat.ownerId;
     renderActiveChatHeader();
-    renderTyping(chat);
     if(chat.unreadCount && chat.unreadCount[currentUser.uid]){
       db.collection('chats').doc(activeChatId).update({[`unreadCount.${currentUser.uid}`]: 0}).catch(()=>{});
     }
@@ -1743,15 +1885,40 @@ function openChat(chatId, chatData){
       toast('Trouble loading messages — retrying…');
     });
 
+  // RTDB typing signal for this chat — near-instant, no Firestore write cost.
+  const typingRef = rtdb.ref('typing/' + chatId);
+  const typingHandler = typingRef.on('value', (snap) => {
+    if(activeChatId !== chatId) return;
+    renderTypingFromRtdb(snap.val() || {});
+  });
+  unsubActiveTyping = () => typingRef.off('value', typingHandler);
+
+  // RTDB read-receipt signal — near-instant "seen" ticks without waiting on
+  // a Firestore write to propagate back down to the sender.
+  const readsRef = rtdb.ref('reads/' + chatId);
+  const readsHandler = readsRef.on('value', (snap) => {
+    if(activeChatId !== chatId) return;
+    rtdbReadsCache = snap.val() || {};
+    if(lastMessageDocsCache) applyRtdbReadTicks();
+  });
+  unsubActiveReads = () => readsRef.off('value', readsHandler);
+
+  // Mark my own read-position immediately on open.
+  rtdb.ref('reads/' + chatId + '/' + currentUser.uid).set(firebase.database.ServerValue.TIMESTAMP).catch(()=>{});
+
   highlightActiveRow();
 }
+
+let rtdbReadsCache = {};
 
 function closeActiveChat(){
   if(unsubChatDoc) unsubChatDoc();
   if(unsubMessages) unsubMessages();
   if(unsubPartnerDoc) unsubPartnerDoc();
+  detachActiveRtdbSignals();
   activeChatId = null; activeChat = null; activePartner = null;
   lastMessageDocsCache = null;
+  rtdbReadsCache = {};
   $('active-chat-view').style.display = 'none';
   $('no-chat-state').style.display = 'flex';
   $('app').classList.remove('chat-open');
@@ -1776,6 +1943,7 @@ function renderActiveChatHeader(){
     $('header-status').classList.remove('online');
   }
   $('group-info-btn').style.display = activeChat.isGroup ? 'flex' : 'none';
+  $('close-dm-btn').style.display = activeChat.isGroup ? 'none' : 'flex';
 }
 
 // Called from the chat-list snapshot to keep the open chat's header (name,
@@ -1797,6 +1965,10 @@ $('header-avatar-wrap').addEventListener('click', () => {
   if(activeChat && activeChat.isGroup) openGroupInfo();
 });
 $('group-info-btn').addEventListener('click', openGroupInfo);
+$('close-dm-btn').addEventListener('click', () => {
+  if(!activeChat || activeChat.isGroup) return;
+  closeDm(activeChat.id, activeChat.name);
+});
 
 function highlightActiveRow(){
   document.querySelectorAll('.chat-row').forEach(r => r.classList.toggle('active', r.dataset.id === activeChatId));
@@ -1813,6 +1985,32 @@ function markMessagesRead(docs){
     }
   });
   if(any) batch.commit().catch(()=>{});
+  // Also bump the RTDB read marker so the other side's "Read" tick appears
+  // instantly instead of waiting on this Firestore batch to propagate.
+  if(activeChatId){
+    rtdb.ref('reads/' + activeChatId + '/' + currentUser.uid).set(firebase.database.ServerValue.TIMESTAMP).catch(()=>{});
+  }
+}
+
+// Re-applies "Read"/"Delivered" status on the last message row using the
+// RTDB reads cache, without a full re-render of every message.
+function applyRtdbReadTicks(){
+  if(!activeChat || !lastMessageDocsCache || !lastMessageDocsCache.length) return;
+  const wrap = $('messages');
+  const rows = wrap.querySelectorAll('.msg-row.sent .msg-time');
+  if(!rows.length) return;
+  const lastTimeEl = rows[rows.length - 1];
+  if(!lastTimeEl || !lastTimeEl.dataset.mid) return;
+  let readLabel = 'Delivered';
+  if(activeChat.isGroup){
+    const othersCount = activeChat.members.length - 1;
+    const readCount = Object.keys(rtdbReadsCache).filter(uid => uid !== currentUser.uid).length;
+    readLabel = readCount >= othersCount && othersCount > 0 ? 'Read by all' : readCount > 0 ? `Read by ${readCount}` : 'Delivered';
+  } else if(activePartner){
+    readLabel = rtdbReadsCache[activePartner.uid] ? 'Read' : 'Delivered';
+  }
+  const label = lastTimeEl.querySelector('.read-status-label');
+  if(label) label.textContent = readLabel;
 }
 
 function renderMessages(messages){
@@ -1864,6 +2062,7 @@ function renderMessages(messages){
     row.appendChild(bubble);
     const time = document.createElement('div');
     time.className = 'msg-time';
+    time.dataset.mid = m.id;
     const canUnsend = m.senderId === currentUser.uid && !m.pending && !m.failed;
     if(m.failed){
       const retrySpan = document.createElement('span');
@@ -1889,34 +2088,32 @@ function renderMessages(messages){
     wrap.appendChild(row);
     if(m.senderId === currentUser.uid && !m.pending && !m.failed) lastMine = {m, row, time};
   });
-  if(lastMine && !activeChat.isGroup){
-    const read = lastMine.m.readBy && activePartner && lastMine.m.readBy.includes(activePartner.uid);
+  if(lastMine){
+    let readLabel = 'Delivered';
+    if(!activeChat.isGroup){
+      const read = lastMine.m.readBy && activePartner && lastMine.m.readBy.includes(activePartner.uid);
+      readLabel = read ? 'Read' : 'Delivered';
+    } else {
+      const othersCount = activeChat.members.length - 1;
+      const readCount = (lastMine.m.readBy || []).filter(uid => uid !== currentUser.uid).length;
+      readLabel = readCount >= othersCount && othersCount > 0 ? 'Read by all' : readCount > 0 ? `Read by ${readCount}` : 'Delivered';
+    }
     lastMine.time.textContent = '';
-    lastMine.time.appendChild(document.createTextNode(fmtTime(lastMine.m.createdAt) + '  ·  ' + (read ? 'Read' : 'Delivered') + ' '));
-    const unsendSpan = document.createElement('span');
-    unsendSpan.className = 'unsend-link';
-    unsendSpan.dataset.mid = lastMine.m.id;
-    unsendSpan.textContent = 'Unsend';
-    lastMine.time.appendChild(unsendSpan);
-  } else if(lastMine && activeChat.isGroup){
-    const othersCount = activeChat.members.length - 1;
-    const readCount = (lastMine.m.readBy || []).filter(uid => uid !== currentUser.uid).length;
-    const statusText = readCount >= othersCount && othersCount > 0 ? 'Read by all' : readCount > 0 ? `Read by ${readCount}` : 'Delivered';
-    lastMine.time.textContent = '';
-    lastMine.time.appendChild(document.createTextNode(fmtTime(lastMine.m.createdAt) + '  ·  ' + statusText + ' '));
+    lastMine.time.appendChild(document.createTextNode(fmtTime(lastMine.m.createdAt) + '  ·  '));
+    const label = document.createElement('span');
+    label.className = 'read-status-label';
+    label.textContent = readLabel;
+    lastMine.time.appendChild(label);
+    lastMine.time.appendChild(document.createTextNode(' '));
     const unsendSpan = document.createElement('span');
     unsendSpan.className = 'unsend-link';
     unsendSpan.dataset.mid = lastMine.m.id;
     unsendSpan.textContent = 'Unsend';
     lastMine.time.appendChild(unsendSpan);
   }
-  // Bind click handlers once, after all DOM (including the lastMine
-  // rewrite above) has settled — previously the lastMine branch used
-  // innerHTML to rewrite the last message's time row, which silently threw
-  // away any 'unsend-link'/'retry-link' listener bound before it ran.
-  // Since we now build every node explicitly with createElement instead of
-  // innerHTML, there's nothing left to destroy, and a single binding pass
-  // at the end reliably wires up every retry/unsend link that exists.
+  // Bind click handlers once, after all DOM has settled — every node is
+  // built explicitly with createElement (no innerHTML rewrites), so a
+  // single binding pass reliably wires up every retry/unsend link.
   wrap.querySelectorAll('.retry-link').forEach(link => {
     link.addEventListener('click', () => retryMessage(link.dataset.mid));
   });
@@ -1925,17 +2122,23 @@ function renderMessages(messages){
   });
   if(typingEl) wrap.appendChild(typingEl);
   wrap.scrollTop = wrap.scrollHeight + 999;
+  // Apply any read ticks we already know about from RTDB immediately.
+  applyRtdbReadTicks();
 }
 
-function renderTyping(chat){
+// Renders the typing indicator from the RTDB typing/{chatId} snapshot.
+// This replaces the old Firestore-chat-doc-based typing field: RTDB pushes
+// typing state to listeners in tens of milliseconds instead of Firestore's
+// couple hundred, which is most of what makes the chat feel "live".
+function renderTypingFromRtdb(typingMap){
   const wrap = $('messages');
   let el = wrap.querySelector('.typing-row');
   let isTyping = false;
-  if(chat && chat.typing){
+  if(activeChat){
     if(activeChat.isGroup){
-      isTyping = Object.keys(chat.typing).some(uid => uid !== currentUser.uid && chat.typing[uid]);
+      isTyping = Object.keys(typingMap).some(uid => uid !== currentUser.uid && typingMap[uid]);
     } else if(activePartner){
-      isTyping = !!chat.typing[activePartner.uid];
+      isTyping = !!typingMap[activePartner.uid];
     }
   }
   if(isTyping && !el){
@@ -1991,7 +2194,7 @@ function toastConfirm(title, onConfirm) {
     <div class="toast-text">
       <div class="toast-title">${title}</div>
     </div>
-    <button class="toast-btn-confirm" style="border:none; padding:5px 10px; border-radius:6px; cursor:pointer; font-size:12px;">Unsend</button>
+    <button class="toast-btn-confirm" style="border:none; padding:5px 10px; border-radius:6px; cursor:pointer; font-size:12px;">Confirm</button>
     <button class="toast-btn-cancel" style="border:none; padding:5px 10px; border-radius:6px; cursor:pointer; font-size:12px;">Cancel</button>
   `;
 
@@ -2016,7 +2219,8 @@ async function unsendMessage(mid) {
     try {
       await db.collection('chats').doc(chatId).collection('messages').doc(mid).delete();
       await refreshChatPreview(chatId);
-      toast('Message unsent completely');
+      pingChat(chatId, { from: currentUser.uid });
+      toast('Message unsent');
     } catch (err) {
       toast('Could not unsend', err.message);
     }
@@ -2043,125 +2247,48 @@ async function refreshChatPreview(chatId){
   }
 }
 
-/* ================= Composer ================= */
-function attachComposerHandlers(){
-  const input = $('message-input');
-  const sendBtn = $('send-btn');
-  const attachBtn = $('attach-btn');
-  const attachInput = $('attach-input');
-
-  input.addEventListener('input', () => {
-    input.style.height = 'auto';
-    input.style.height = Math.min(input.scrollHeight, 110) + 'px';
-    sendBtn.disabled = !input.value.trim();
-    if(!activeChatId) return;
-    if(!isCurrentlyTyping){
-      isCurrentlyTyping = true;
-      setTyping(true);
-    }
-    clearTimeout(typingTimeout);
-    typingTimeout = setTimeout(() => { isCurrentlyTyping = false; setTyping(false); }, 1800);
-  });
-
-  input.addEventListener('keydown', (e) => {
-    if(e.key === 'Enter' && !e.shiftKey){
-      e.preventDefault();
-      sendMessage();
-    }
-  });
-
-  sendBtn.addEventListener('click', sendMessage);
-
-  attachBtn.addEventListener('click', () => {
-    if(!activeChatId){ toast('Open a conversation first.'); return; }
-    attachInput.click();
-  });
-
-  attachInput.addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    attachInput.value = '';
-    if(!file || !activeChatId) return;
-    attachBtn.classList.add('uploading');
+/* ================= Close DM (hard delete, both sides) ================= */
+async function closeDm(chatId, name){
+  if(!chatId) return;
+  toastConfirm(`Close conversation with ${name}? This deletes it for both of you — permanently.`, async () => {
     try{
-      const photoURL = await withTimeout(uploadToImgbb(file), 20000, 'Photo upload');
-      await sendMessageInternal({ text: '', photoURL });
+      await hardDeleteChat(chatId);
+      if(activeChatId === chatId) closeActiveChat();
+      toast('Conversation closed');
     }catch(err){
-      toast('Photo failed to send: ' + err.message);
-    }finally{
-      attachBtn.classList.remove('uploading');
+      toast('Could not close conversation: ' + err.message);
     }
   });
 }
 
-function setTyping(val){
-  if(!activeChatId) return;
-  db.collection('chats').doc(activeChatId).set({typing: {[currentUser.uid]: val}}, {merge:true}).catch(()=>{});
-}
-
-async function sendMessage(){
-  const input = $('message-input');
-  const text = input.value.trim();
-  if(!text || !activeChatId) return;
-  input.value = '';
-  input.style.height = 'auto';
-  $('send-btn').disabled = true;
-  clearTimeout(typingTimeout);
-  isCurrentlyTyping = false;
-  setTyping(false);
-  await sendMessageInternal({ text });
-}
-
-async function sendMessageInternal({ text, photoURL }){
-  if(!activeChatId || !activeChat) return;
-
-  const chatRef = db.collection('chats').doc(activeChatId);
-  const msgRef = chatRef.collection('messages').doc();
-
-  const msgPayload = {
-    text: text || '',
-    senderId: currentUser.uid,
-    senderName: myDoc.displayName,
-    createdAt: FieldValue.serverTimestamp(),
-    readBy: [currentUser.uid]
-  };
-  if(photoURL) msgPayload.photoURL = photoURL;
-
-  const chatUpdate = {
-    members: activeChat.members,
-    isGroup: activeChat.isGroup,
-    lastMessage: text || (photoURL ? '📷 Photo' : ''),
-    lastMessageAt: FieldValue.serverTimestamp(),
-    lastSenderId: currentUser.uid,
-    lastSenderName: myDoc.displayName,
-    [`unreadCount.${currentUser.uid}`]: 0,
-    [`typing.${currentUser.uid}`]: false
-  };
-  activeChat.members.forEach(uid => {
-    if(uid !== currentUser.uid) chatUpdate[`unreadCount.${uid}`] = FieldValue.increment(1);
-  });
-  if(activeChat.isGroup){
-    chatUpdate.groupName = activeChat.name;
-  }
-
-  const batch = db.batch();
-  batch.set(msgRef, msgPayload);
-  batch.set(chatRef, chatUpdate, {merge:true});
-
-  try{
+// Deletes the chat doc, every message in its subcollection, and the
+// associated RTDB signal nodes (pings/typing/reads). Firestore security
+// rules should allow any member of `members` to delete the chat doc and its
+// messages subcollection for this to succeed from the client; if your rules
+// are locked down tighter than that, this delete should be moved server-side
+// (e.g. a Cloud Function triggered off a "closedBy" field) instead.
+async function hardDeleteChat(chatId){
+  const chatRef = db.collection('chats').doc(chatId);
+  const msgsSnap = await chatRef.collection('messages').get();
+  // Firestore batches cap at 500 writes; chunk defensively.
+  const docs = msgsSnap.docs;
+  for(let i = 0; i < docs.length; i += 450){
+    const batch = db.batch();
+    docs.slice(i, i + 450).forEach(d => batch.delete(d.ref));
+    batch.delete(chatRef); // safe to include repeatedly across chunks; last one wins
     await batch.commit();
-  }catch(err){
-    console.error('Send failed:', err);
-    toast((navigator.onLine ? 'Message failed to send: ' : 'You\'re offline — ') + err.message);
-    // Previously this just toasted and gave up — the message vanished with
-    // no way to recover it, and the "Retry" link elsewhere in the code had
-    // nothing to actually retry. Write a locally-visible failed message
-    // record instead, so there's a real doc for the Retry link to act on.
-    try{
-      await msgRef.set({ ...msgPayload, failed: true, createdAt: FieldValue.serverTimestamp() });
-    }catch(e2){
-      console.error('Could not even save failed message locally:', e2);
-    }
   }
+  if(docs.length === 0){
+    await chatRef.delete();
+  }
+  // Clean up RTDB signal nodes for this chat so nothing lingers/leaks.
+  await Promise.all([
+    rtdb.ref('pings/' + chatId).remove().catch(()=>{}),
+    rtdb.ref('typing/' + chatId).remove().catch(()=>{}),
+    rtdb.ref('reads/' + chatId).remove().catch(()=>{})
+  ]);
+  chatRowCache.delete(chatId);
+  lastSeenTimestamps.delete(chatId);
 }
 
 // Previously this was a complete no-op disguised as a retry: it just
@@ -2202,6 +2329,7 @@ async function postSystemMessage(chatId, text){
       lastSenderId: null,
       lastSenderName: null
     }, {merge:true});
+    pingChat(chatId, { from: currentUser.uid });
   }catch(err){
     console.error('Could not post system message:', err);
   }
@@ -2340,6 +2468,8 @@ $('ginfo-leave-btn').addEventListener('click', async () => {
     }
     await db.collection('chats').doc(chatId).update(update);
     await postSystemMessage(chatId, `${myDoc.displayName} left the group`);
+    rtdb.ref('typing/' + chatId + '/' + currentUser.uid).remove().catch(()=>{});
+    rtdb.ref('reads/' + chatId + '/' + currentUser.uid).remove().catch(()=>{});
     $('group-info-modal').classList.remove('show');
     closeActiveChat();
     toast('You left the group.');
@@ -2358,6 +2488,8 @@ async function removeMemberFromGroup(uid, name){
       [`typing.${uid}`]: FieldValue.delete()
     });
     await postSystemMessage(activeChatId, `${myDoc.displayName} removed ${name} from the group`);
+    rtdb.ref('typing/' + activeChatId + '/' + uid).remove().catch(()=>{});
+    rtdb.ref('reads/' + activeChatId + '/' + uid).remove().catch(()=>{});
     toast(`Removed ${name}`);
     await renderGroupInfoMembers();
   }catch(err){
@@ -2442,6 +2574,138 @@ $('add-member-confirm-btn').addEventListener('click', async () => {
   }
 });
 
+/* ================= Composer ================= */
+function attachComposerHandlers(){
+  const input = $('message-input');
+  const sendBtn = $('send-btn');
+  const attachBtn = $('attach-btn');
+  const attachInput = $('attach-input');
+
+  input.addEventListener('input', () => {
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 110) + 'px';
+    sendBtn.disabled = !input.value.trim();
+    if(!activeChatId) return;
+    if(!isCurrentlyTyping){
+      isCurrentlyTyping = true;
+      setTyping(true);
+    }
+    clearTimeout(typingTimeout);
+    typingTimeout = setTimeout(() => { isCurrentlyTyping = false; setTyping(false); }, 1800);
+  });
+
+  input.addEventListener('keydown', (e) => {
+    if(e.key === 'Enter' && !e.shiftKey){
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+
+  sendBtn.addEventListener('click', sendMessage);
+
+  attachBtn.addEventListener('click', () => {
+    if(!activeChatId){ toast('Open a conversation first.'); return; }
+    attachInput.click();
+  });
+
+  attachInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    attachInput.value = '';
+    if(!file || !activeChatId) return;
+    attachBtn.classList.add('uploading');
+    try{
+      const photoURL = await withTimeout(uploadToImgbb(file), 20000, 'Photo upload');
+      await sendMessageInternal({ text: '', photoURL });
+    }catch(err){
+      toast('Photo failed to send: ' + err.message);
+    }finally{
+      attachBtn.classList.remove('uploading');
+    }
+  });
+}
+
+// Typing state now lives purely in RTDB (see openChat's typing listener) —
+// this is a plain low-latency key write instead of a Firestore doc merge,
+// which is both faster and cheaper.
+function setTyping(val){
+  if(!activeChatId) return;
+  rtdb.ref('typing/' + activeChatId + '/' + currentUser.uid).set(val).catch(()=>{});
+}
+
+async function sendMessage(){
+  const input = $('message-input');
+  const text = input.value.trim();
+  if(!text || !activeChatId) return;
+  input.value = '';
+  input.style.height = 'auto';
+  $('send-btn').disabled = true;
+  clearTimeout(typingTimeout);
+  isCurrentlyTyping = false;
+  setTyping(false);
+  await sendMessageInternal({ text });
+}
+
+async function sendMessageInternal({ text, photoURL }){
+  if(!activeChatId || !activeChat) return;
+
+  const chatId = activeChatId;
+  const chatRef = db.collection('chats').doc(chatId);
+  const msgRef = chatRef.collection('messages').doc();
+
+  const msgPayload = {
+    text: text || '',
+    senderId: currentUser.uid,
+    senderName: myDoc.displayName,
+    createdAt: FieldValue.serverTimestamp(),
+    readBy: [currentUser.uid]
+  };
+  if(photoURL) msgPayload.photoURL = photoURL;
+
+  const chatUpdate = {
+    members: activeChat.members,
+    isGroup: activeChat.isGroup,
+    lastMessage: text || (photoURL ? '📷 Photo' : ''),
+    lastMessageAt: FieldValue.serverTimestamp(),
+    lastSenderId: currentUser.uid,
+    lastSenderName: myDoc.displayName,
+    [`unreadCount.${currentUser.uid}`]: 0
+  };
+  activeChat.members.forEach(uid => {
+    if(uid !== currentUser.uid) chatUpdate[`unreadCount.${uid}`] = FieldValue.increment(1);
+  });
+  if(activeChat.isGroup){
+    chatUpdate.groupName = activeChat.name;
+  }
+
+  const batch = db.batch();
+  batch.set(msgRef, msgPayload);
+  batch.set(chatRef, chatUpdate, {merge:true});
+
+  // Fire the RTDB ping the instant we start sending — don't wait on the
+  // Firestore commit. This is the main speed win: every other tab/device
+  // watching this chat (via syncSidebarPings / the active-chat ping) wakes
+  // up and re-checks Firestore in well under 100ms, instead of waiting on
+  // Firestore's own listener fan-out latency. Worst case if the Firestore
+  // write then fails, the ping just caused an early no-op re-check.
+  pingChat(chatId, { from: currentUser.uid });
+
+  try{
+    await batch.commit();
+  }catch(err){
+    console.error('Send failed:', err);
+    toast((navigator.onLine ? 'Message failed to send: ' : 'You\'re offline — ') + err.message);
+    // Previously this just toasted and gave up — the message vanished with
+    // no way to recover it, and the "Retry" link elsewhere in the code had
+    // nothing to actually retry. Write a locally-visible failed message
+    // record instead, so there's a real doc for the Retry link to act on.
+    try{
+      await msgRef.set({ ...msgPayload, failed: true, createdAt: FieldValue.serverTimestamp() });
+    }catch(e2){
+      console.error('Could not even save failed message locally:', e2);
+    }
+  }
+}
+
 /* ================= Profile modal ================= */
 let modalAvatarFile = null;
 
@@ -2508,8 +2772,8 @@ $('modal-save-btn').addEventListener('click', async () => {
 });
 
 /* ================= Sign out ================= */
-$('signout-btn').addEventListener('click', () => auth.signOut());
-$('modal-signout-btn').addEventListener('click', () => { $('profile-modal').classList.remove('show'); auth.signOut(); });
+$('signout-btn').addEventListener('click', () => { teardownPresence(); auth.signOut(); });
+$('modal-signout-btn').addEventListener('click', () => { $('profile-modal').classList.remove('show'); teardownPresence(); auth.signOut(); });
 </script>
 </body>
 </html>
