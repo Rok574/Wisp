@@ -229,7 +229,7 @@
 
   .chat-list{flex:1; overflow-y:auto; padding:4px 8px 12px;}
   .chat-row{
-    display:flex; align-items:center; gap:11px; padding:10px 10px; border-radius:14px; cursor:pointer;
+    display:flex; align-items:center; gap:11px; padding:10px 44px 10px 10px; border-radius:14px; cursor:pointer;
     transition:background .12s ease; position:relative;
   }
   .chat-row:hover{background:var(--bg);}
@@ -252,11 +252,13 @@
     border-radius:9px; display:flex; align-items:center; justify-content:center; padding:0 5px; flex-shrink:0;
   }
   .chat-close-btn{
-    opacity:0; flex-shrink:0; width:26px; height:26px; border-radius:50%;
+    opacity:0; position:absolute; top:50%; right:10px; transform:translateY(-50%);
+    width:26px; height:26px; border-radius:50%;
     display:flex; align-items:center; justify-content:center; color:var(--ink-faint);
+    background:var(--surface);
     transition:opacity .12s ease, background .12s ease, color .12s ease;
   }
-  .chat-close-btn:hover{background:var(--surface); color:var(--danger);}
+  .chat-close-btn:hover{background:var(--bg); color:var(--danger);}
   .chat-close-btn svg{width:14px; height:14px;}
   .empty-chats{padding:40px 24px; text-align:center; color:var(--ink-faint); font-size:13px; line-height:1.6;}
 
