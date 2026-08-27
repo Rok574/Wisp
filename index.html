@@ -952,6 +952,19 @@ input {
   align-items: flex-start;
 }
 
+/* ---- iMessage-style date/time cluster separator ---- */
+.date-separator {
+  align-self: center;
+  max-width: 90%;
+  text-align: center;
+  color: var(--ink-faint);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  padding: 14px 10px 6px;
+  font-family: var(--font-body);
+}
+
 .bubble {
   max-width: 100%;
   padding: 11px 16px;
@@ -998,6 +1011,69 @@ input {
 
 .bubble.has-photo {
   padding: 5px;
+}
+
+.photo-progress-wrap {
+  position: relative;
+  width: 240px;
+  height: 180px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--glass-surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.photo-progress-wrap img.msg-photo-preview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(2px) brightness(0.75);
+}
+
+.photo-progress-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #fff;
+}
+
+.photo-progress-ring {
+  width: 40px;
+  height: 40px;
+  position: relative;
+}
+
+.photo-progress-ring svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.photo-progress-ring circle {
+  fill: none;
+  stroke-width: 3.5;
+}
+
+.photo-progress-ring .track {
+  stroke: rgba(255,255,255,0.3);
+}
+
+.photo-progress-ring .fill {
+  stroke: #fff;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.15s ease;
+}
+
+.photo-progress-pct {
+  font-size: 11.5px;
+  font-weight: 600;
+  font-family: var(--font-mono);
 }
 
 .msg-row.sent .bubble {
@@ -1385,24 +1461,194 @@ input {
   cursor: pointer;
 }
 
-.toast .toast-btn-confirm {
-  background: var(--danger);
-  color: #fff;
-  border-radius: 8px;
-  padding: 4px 10px;
-  font-weight: 600;
-}
-
-.toast .toast-btn-cancel {
-  background: var(--glass-surface);
-  color: var(--ink);
-  border-radius: 8px;
-  padding: 4px 10px;
-  font-weight: 600;
-}
-
 input[type="file"] {
   display: none;
+}
+
+/* ---------- iOS-style alert dialog (replaces confirm()/toastConfirm) ---------- */
+.alert-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.32);
+  z-index: 400;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.alert-backdrop.show {
+  display: flex;
+  animation: alertBackdropIn 0.15s ease-out;
+}
+
+@keyframes alertBackdropIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Solid iOS-style sheet: no glass/blur bleed from the surrounding UI —
+   iOS alerts are a crisp opaque (or lightly translucent-but-blurred-only-
+   to-what's-behind-the-dimmer) card, not a see-through glass pane. */
+.alert-box {
+  width: 100%;
+  max-width: 270px;
+  background: var(--bg);
+  border: none;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.35);
+  animation: alertPop 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  text-align: center;
+}
+
+@keyframes alertPop {
+  0% { transform: scale(0.82); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.alert-body {
+  padding: 19px 18px 16px;
+}
+
+.alert-title {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.35;
+  margin-bottom: 4px;
+}
+
+.alert-message {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  line-height: 1.4;
+}
+
+.alert-actions {
+  display: flex;
+  border-top: 1px solid var(--border);
+}
+
+.alert-btn {
+  flex: 1;
+  padding: 12px 8px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--accent);
+  transition: background 0.15s ease;
+  cursor: pointer;
+}
+
+.alert-btn + .alert-btn {
+  border-left: 1px solid var(--border);
+}
+
+.alert-btn:hover {
+  background: var(--glass-surface);
+}
+
+.alert-btn.destructive {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.alert-btn.cancel {
+  font-weight: 400;
+}
+
+/* ---------- Crop modal ---------- */
+.crop-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 17, 26, 0.5);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  z-index: 250;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.crop-backdrop.show {
+  display: flex;
+}
+
+.crop-modal {
+  background: var(--surface);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-shadow);
+  animation: modalPop 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.crop-modal h3 {
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.crop-stage {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 16px;
+  overflow: hidden;
+  position: relative;
+  background: #000;
+  touch-action: none;
+  cursor: grab;
+}
+
+.crop-stage:active {
+  cursor: grabbing;
+}
+
+.crop-stage img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+
+.crop-stage::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 16px;
+  box-shadow: inset 0 0 0 999px rgba(0,0,0,0);
+  border: 2px solid rgba(255,255,255,0.6);
+  pointer-events: none;
+}
+
+.crop-zoom-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.crop-zoom-row svg {
+  width: 16px;
+  height: 16px;
+  color: var(--ink-faint);
+  flex-shrink: 0;
+}
+
+.crop-zoom-row input[type="range"] {
+  flex: 1;
+  accent-color: var(--accent);
 }
 
 /* Responsive */
@@ -1996,6 +2242,36 @@ input[type="file"] {
   </div>
 </div>
 
+<!-- CROP MODAL (used for setup/profile/group avatar uploads) -->
+<div class="crop-backdrop" id="crop-backdrop">
+  <div class="crop-modal">
+    <h3>Move and scale</h3>
+    <div class="crop-stage" id="crop-stage">
+      <img id="crop-img" src="" alt="">
+    </div>
+    <div class="crop-zoom-row">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="10" r="6"/><path d="M21 21l-4.35-4.35"/><line x1="7" y1="10" x2="13" y2="10"/></svg>
+      <input type="range" id="crop-zoom-range" min="1" max="3" step="0.01" value="1">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="10" r="6"/><path d="M21 21l-4.35-4.35"/><line x1="7" y1="10" x2="13" y2="10"/><line x1="10" y1="7" x2="10" y2="13"/></svg>
+    </div>
+    <div class="modal-actions">
+      <button class="ghost-btn" id="crop-cancel-btn">Cancel</button>
+      <button class="primary-btn" id="crop-confirm-btn">Choose</button>
+    </div>
+  </div>
+</div>
+
+<!-- iMessage-style alert dialog (replaces window.confirm / toastConfirm) -->
+<div class="alert-backdrop" id="alert-backdrop">
+  <div class="alert-box" id="alert-box">
+    <div class="alert-body">
+      <div class="alert-title" id="alert-title"></div>
+      <div class="alert-message" id="alert-message"></div>
+    </div>
+    <div class="alert-actions" id="alert-actions"></div>
+  </div>
+</div>
+
 <div class="toast-stack" id="toast-stack"></div>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -2013,8 +2289,6 @@ const firebaseConfig = {
   messagingSenderId: "32627041423",
   appId: "1:32627041423:web:9671907c64c06c06e77cfa",
   measurementId: "G-H9XQZ5YML6",
-  // If your project's Realtime Database is in a non-default region, set the
-  // explicit databaseURL here, e.g. "https://imessage-59122-default-rtdb.firebaseio.com"
   databaseURL: "https://imessage-59122-default-rtdb.firebaseio.com"
 };
 firebase.initializeApp(firebaseConfig);
@@ -2032,13 +2306,11 @@ async function uploadToImgbb(file) {
     throw new Error('Please select a valid image file.');
   }
 
-  // Apps Script crashes above ~35MB due to Base64 size expansion (50MB limit)
   const MAX_SIZE_MB = 35;
   if (file.size > MAX_SIZE_MB * 1024 * 1024) {
     throw new Error(`Image size exceeds ${MAX_SIZE_MB}MB limit for Apps Script proxy.`);
   }
 
-  // Fast Async Base64 Conversion
   const base64Image = await new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
@@ -2082,10 +2354,61 @@ async function uploadToImgbb(file) {
   }
 }
 
+/* ---- Upload variant that reports real upload progress via XHR, used for
+   chat photo attachments so the composer/message can show a progress ring
+   instead of just a spinner-less "uploading" state. ---- */
+function uploadToImgbbWithProgress(file, onProgress) {
+  return new Promise((resolve, reject) => {
+    if (!file || !file.type || !file.type.startsWith('image/')) {
+      reject(new Error('Please select a valid image file.'));
+      return;
+    }
+    const MAX_SIZE_MB = 35;
+    if (file.size > MAX_SIZE_MB * 1024 * 1024) {
+      reject(new Error(`Image size exceeds ${MAX_SIZE_MB}MB limit for Apps Script proxy.`));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      const base64Image = result.substring(result.indexOf(',') + 1);
+      const extFromType = (file.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
+      const safeName = (file.name && file.name.trim()) ? file.name.trim() : `img_${Date.now()}.${extFromType}`;
+
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', PROXY_URL, true);
+      xhr.setRequestHeader('Content-Type', 'text/plain;charset=utf-8');
+      xhr.upload.onprogress = (evt) => {
+        if (evt.lengthComputable && onProgress) {
+          onProgress(Math.min(99, Math.round((evt.loaded / evt.total) * 100)));
+        }
+      };
+      xhr.onload = () => {
+        try {
+          const data = JSON.parse(xhr.responseText);
+          if (!data.success) {
+            const msg = (data.error && data.error.message) ? data.error.message : (data.error || 'Upload failed');
+            reject(new Error(msg));
+            return;
+          }
+          if (onProgress) onProgress(100);
+          resolve(data.data.url);
+        } catch (e) {
+          reject(new Error('Invalid response from upload proxy'));
+        }
+      };
+      xhr.onerror = () => reject(new Error('Network error during upload'));
+      xhr.send(JSON.stringify({ image: base64Image, mimeType: file.type, fileName: safeName }));
+    };
+    reader.onerror = (err) => reject(err);
+    reader.readAsDataURL(file);
+  });
+}
+
 /* ================= Helpers ================= */
 const $ = (id) => document.getElementById(id);
 
-/* ---- Toasts (also used for what were previously "in-app notification banners") ---- */
+/* ---- Toasts (informational only — no action buttons; see alertConfirm() for confirmations) ---- */
 function toast(msg, opts){
   opts = opts || {};
   const stack = $('toast-stack');
@@ -2122,7 +2445,9 @@ function toast(msg, opts){
   stack.appendChild(el);
   requestAnimationFrame(() => el.classList.add('show'));
   const duration = opts.duration || (opts.title ? 4500 : 2800);
-  el._timer = setTimeout(() => removeToast(el), duration);
+  if(duration > 0){
+    el._timer = setTimeout(() => removeToast(el), duration);
+  }
   return el;
 }
 function removeToast(el){
@@ -2131,6 +2456,73 @@ function removeToast(el){
   el.classList.remove('show');
   setTimeout(() => el.remove(), 220);
 }
+// Updates the body text of a toast returned by toast() — used for live
+// upload-progress messages ("Uploading photo… 42%").
+function updateToastText(el, msg){
+  if(!el || !el.parentNode) return;
+  const body = el.querySelector('.toast-body') || el.querySelector('div');
+  if(body) body.textContent = msg;
+}
+
+/* ---- iMessage-style alert dialog ----
+   Replaces window.confirm() and the old button-toast (toastConfirm) with a
+   proper centered modal dialog styled like an iOS action sheet/alert:
+   bold title, gray message, a divider, and pill-less full-width buttons
+   separated by vertical rules. Destructive actions render in red.
+
+   alertConfirm(title, message, { destructiveLabel, cancelLabel }) returns
+   a Promise<boolean> — true if the destructive/confirm button was tapped.
+*/
+let alertActiveResolver = null;
+function closeAlert(result){
+  const backdrop = $('alert-backdrop');
+  backdrop.classList.remove('show');
+  if(alertActiveResolver){
+    const resolve = alertActiveResolver;
+    alertActiveResolver = null;
+    resolve(result);
+  }
+}
+function alertConfirm(title, message, opts){
+  opts = opts || {};
+  const destructiveLabel = opts.destructiveLabel || 'Confirm';
+  const cancelLabel = opts.cancelLabel || 'Cancel';
+  const isDestructive = opts.destructive !== false;
+
+  return new Promise((resolve) => {
+    if(alertActiveResolver) closeAlert(false);
+    alertActiveResolver = resolve;
+
+    $('alert-title').textContent = title;
+    $('alert-message').textContent = message || '';
+    $('alert-message').style.display = message ? 'block' : 'none';
+
+    const actions = $('alert-actions');
+    actions.innerHTML = '';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'alert-btn cancel';
+    cancelBtn.textContent = cancelLabel;
+    cancelBtn.addEventListener('click', () => closeAlert(false));
+    actions.appendChild(cancelBtn);
+
+    const confirmBtn = document.createElement('button');
+    confirmBtn.type = 'button';
+    confirmBtn.className = 'alert-btn' + (isDestructive ? ' destructive' : '');
+    confirmBtn.textContent = destructiveLabel;
+    confirmBtn.addEventListener('click', () => closeAlert(true));
+    actions.appendChild(confirmBtn);
+
+    $('alert-backdrop').classList.add('show');
+  });
+}
+$('alert-backdrop').addEventListener('click', (e) => {
+  if(e.target === $('alert-backdrop')) closeAlert(false);
+});
+document.addEventListener('keydown', (e) => {
+  if(e.key === 'Escape' && $('alert-backdrop').classList.contains('show')) closeAlert(false);
+});
 
 const AVATAR_PALETTE = ['#5B5FEF','#34D399','#F59E0B','#EC4899','#06B6D4','#8B5CF6','#F97316','#10B981'];
 function hashSeed(str){
@@ -2191,6 +2583,36 @@ function fmtDayTime(ts){
   if(sameDay) return d.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
   return d.toLocaleDateString([], {month:'short', day:'numeric'});
 }
+
+/* ---- iMessage-style date/time cluster label ---- */
+function startOfDay(d){
+  const c = new Date(d);
+  c.setHours(0,0,0,0);
+  return c;
+}
+function fmtClusterLabel(ts){
+  if(!ts) return '';
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  const now = new Date();
+  const today0 = startOfDay(now);
+  const day0 = startOfDay(d);
+  const diffDays = Math.round((today0 - day0) / 86400000);
+  const time = d.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+
+  if(diffDays === 0) return `Today ${time}`;
+  if(diffDays === 1) return `Yesterday ${time}`;
+  if(diffDays > 1 && diffDays < 7){
+    const weekday = d.toLocaleDateString([], {weekday:'long'});
+    return `${weekday} ${time}`;
+  }
+  const sameYear = d.getFullYear() === now.getFullYear();
+  const dateLabel = d.toLocaleDateString([], sameYear
+    ? {month:'short', day:'numeric'}
+    : {month:'short', day:'numeric', year:'numeric'});
+  return `${dateLabel} ${time}`;
+}
+const CLUSTER_GAP_MS = 60 * 60 * 1000;
+
 function relativeAgo(ts){
   if(!ts) return 'offline';
   const d = ts.toDate ? ts.toDate() : new Date(ts);
@@ -2209,6 +2631,146 @@ function withTimeout(promise, ms, label){
     new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} timed out after ${ms/1000}s — check your connection`)), ms))
   ]);
 }
+
+/* ================= Crop modal ================= */
+/*
+ * A minimal drag-to-pan + slider-to-zoom square cropper. Opens on any avatar
+ * file selection (setup / profile / group), lets the user reposition and
+ * zoom before committing, and resolves with a cropped square File (JPEG).
+ * This replaces silently center-cropping or — worse — sending whatever the
+ * OS/browser file picker happened to hand back.
+ */
+let cropState = null; // { img, natW, natH, minScale, scale, offX, offY, stageSize, dragging, startX, startY, startOffX, startOffY }
+let cropResolve = null;
+let cropReject = null;
+
+function openCropModal(file){
+  return new Promise((resolve, reject) => {
+    cropResolve = resolve;
+    cropReject = reject;
+    const url = URL.createObjectURL(file);
+    const imgEl = $('crop-img');
+    imgEl.src = url;
+    imgEl.onload = () => {
+      const stage = $('crop-stage');
+      const stageSize = stage.clientWidth || 320;
+      const natW = imgEl.naturalWidth;
+      const natH = imgEl.naturalHeight;
+      const minScale = stageSize / Math.min(natW, natH);
+      cropState = {
+        natW, natH, stageSize,
+        minScale, scale: minScale,
+        offX: (stageSize - natW * minScale) / 2,
+        offY: (stageSize - natH * minScale) / 2,
+        dragging: false, startX: 0, startY: 0, startOffX: 0, startOffY: 0
+      };
+      $('crop-zoom-range').min = 1;
+      $('crop-zoom-range').max = 3;
+      $('crop-zoom-range').value = 1;
+      applyCropTransform();
+      $('crop-backdrop').classList.add('show');
+    };
+    imgEl.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Could not load image'));
+    };
+  });
+}
+
+function applyCropTransform(){
+  if(!cropState) return;
+  const imgEl = $('crop-img');
+  imgEl.style.width = cropState.natW + 'px';
+  imgEl.style.height = cropState.natH + 'px';
+  imgEl.style.transform = `translate(${cropState.offX}px, ${cropState.offY}px) scale(${cropState.scale})`;
+}
+
+function clampCropOffsets(){
+  if(!cropState) return;
+  const scaledW = cropState.natW * cropState.scale;
+  const scaledH = cropState.natH * cropState.scale;
+  const minOffX = Math.min(0, cropState.stageSize - scaledW);
+  const minOffY = Math.min(0, cropState.stageSize - scaledH);
+  cropState.offX = Math.max(minOffX, Math.min(0, cropState.offX));
+  cropState.offY = Math.max(minOffY, Math.min(0, cropState.offY));
+}
+
+(function setupCropInteractions(){
+  const stage = $('crop-stage');
+  const onDown = (clientX, clientY) => {
+    if(!cropState) return;
+    cropState.dragging = true;
+    cropState.startX = clientX;
+    cropState.startY = clientY;
+    cropState.startOffX = cropState.offX;
+    cropState.startOffY = cropState.offY;
+  };
+  const onMove = (clientX, clientY) => {
+    if(!cropState || !cropState.dragging) return;
+    cropState.offX = cropState.startOffX + (clientX - cropState.startX);
+    cropState.offY = cropState.startOffY + (clientY - cropState.startY);
+    clampCropOffsets();
+    applyCropTransform();
+  };
+  const onUp = () => { if(cropState) cropState.dragging = false; };
+
+  stage.addEventListener('mousedown', (e) => onDown(e.clientX, e.clientY));
+  window.addEventListener('mousemove', (e) => onMove(e.clientX, e.clientY));
+  window.addEventListener('mouseup', onUp);
+
+  stage.addEventListener('touchstart', (e) => {
+    const t = e.touches[0];
+    onDown(t.clientX, t.clientY);
+  }, {passive:true});
+  stage.addEventListener('touchmove', (e) => {
+    const t = e.touches[0];
+    onMove(t.clientX, t.clientY);
+  }, {passive:true});
+  stage.addEventListener('touchend', onUp);
+
+  $('crop-zoom-range').addEventListener('input', (e) => {
+    if(!cropState) return;
+    const zoomFactor = parseFloat(e.target.value);
+    const stageCenterX = cropState.stageSize / 2;
+    const stageCenterY = cropState.stageSize / 2;
+    const imgX = (stageCenterX - cropState.offX) / cropState.scale;
+    const imgY = (stageCenterY - cropState.offY) / cropState.scale;
+    cropState.scale = cropState.minScale * zoomFactor;
+    cropState.offX = stageCenterX - imgX * cropState.scale;
+    cropState.offY = stageCenterY - imgY * cropState.scale;
+    clampCropOffsets();
+    applyCropTransform();
+  });
+
+  $('crop-cancel-btn').addEventListener('click', () => {
+    $('crop-backdrop').classList.remove('show');
+    if(cropReject) cropReject(new Error('cancelled'));
+    cropState = null; cropResolve = null; cropReject = null;
+  });
+
+  $('crop-confirm-btn').addEventListener('click', () => {
+    if(!cropState){ return; }
+    const outSize = 512;
+    const canvas = document.createElement('canvas');
+    canvas.width = outSize;
+    canvas.height = outSize;
+    const ctx = canvas.getContext('2d');
+    // Map the visible stage square back to source-image pixel coordinates.
+    const sx = -cropState.offX / cropState.scale;
+    const sy = -cropState.offY / cropState.scale;
+    const sSize = cropState.stageSize / cropState.scale;
+    ctx.drawImage($('crop-img'), sx, sy, sSize, sSize, 0, 0, outSize, outSize);
+    canvas.toBlob((blob) => {
+      $('crop-backdrop').classList.remove('show');
+      if(!blob){
+        if(cropReject) cropReject(new Error('Could not process image'));
+      } else if(cropResolve){
+        cropResolve(new File([blob], 'avatar.jpg', { type: 'image/jpeg' }));
+      }
+      cropState = null; cropResolve = null; cropReject = null;
+    }, 'image/jpeg', 0.92);
+  });
+})();
 
 /* ================= State ================= */
 let currentUser = null;
@@ -2229,28 +2791,13 @@ let chatListFirstLoad = true;
 let lastSeenTimestamps = new Map();
 let lastMessageDocsCache = null;
 
-/*
- * ================= RTDB signal layer =================
- * Realtime Database is used ONLY as a low-latency signaling channel:
- *   /pings/{chatId}         -> {at, from}      "a new message landed in this chat, go check Firestore"
- *   /typing/{chatId}/{uid}  -> bool             live typing indicator
- *   /reads/{chatId}/{uid}   -> serverTimestamp   per-user "I've read up to this moment" marker
- *   /presence/{uid}         -> {online, lastSeen}
- *
- * No message content or chat metadata lives in RTDB — Firestore stays the
- * single source of truth for that. RTDB just tells listeners "something
- * changed, go look NOW" without waiting on Firestore's snapshot fan-out,
- * which is what makes the UI feel instant. Actual message bodies still
- * commit to Firestore as before.
- */
-let rtdbPingRefs = new Map();      // chatId -> ref, for chats currently rendered in the sidebar
+let rtdbPingRefs = new Map();
 let unsubActivePing = null;
 let unsubActiveTyping = null;
 let unsubActiveReads = null;
 let presenceRef = null;
 
 function pingChat(chatId, extra){
-  // Fire-and-forget: don't await, don't block the send path on this.
   rtdb.ref('pings/' + chatId).set(Object.assign({
     at: firebase.database.ServerValue.TIMESTAMP
   }, extra || {})).catch(()=>{});
@@ -2276,7 +2823,6 @@ function teardownPresence(){
   presenceRef = null;
 }
 
-/* ================= Connection status (quiet) ================= */
 let listenerErrorCount = 0;
 window.addEventListener('online', () => { if(currentUser) listenChatList(); });
 
@@ -2540,11 +3086,17 @@ $('auth-email').addEventListener('keydown', (e) => {
 
 /* ================= Setup screen ================= */
 let setupAvatarFile = null;
-$('setup-avatar-input').addEventListener('change', (e) => {
+$('setup-avatar-input').addEventListener('change', async (e) => {
   const file = e.target.files[0];
+  e.target.value = '';
   if(!file) return;
-  setupAvatarFile = file;
-  $('setup-avatar-preview').src = URL.createObjectURL(file);
+  try{
+    const cropped = await openCropModal(file);
+    setupAvatarFile = cropped;
+    $('setup-avatar-preview').src = URL.createObjectURL(cropped);
+  }catch(err){
+    if(err.message !== 'cancelled') toast('Could not process image: ' + err.message);
+  }
 });
 
 let setupUsernameValid = false;
@@ -2850,31 +3402,21 @@ function chatDisplayInfo(chat){
   };
 }
 
-/* Attach/detach RTDB "new message" pings for every chat row in the sidebar,
-   so the chat list can react to a new message the instant it lands, rather
-   than waiting on the Firestore chats-listener snapshot alone. The Firestore
-   listener is still what actually re-renders the row (it has the real
-   preview text/unread count) — the RTDB ping is just what makes it re-check
-   sooner instead of waiting for Firestore's own propagation. */
 function detachSidebarPings(){
   rtdbPingRefs.forEach((ref) => ref.off());
   rtdbPingRefs.clear();
 }
 function syncSidebarPings(chatIds){
   const wanted = new Set(chatIds);
-  // remove pings for chats no longer in the list
   rtdbPingRefs.forEach((ref, chatId) => {
     if(!wanted.has(chatId)){ ref.off(); rtdbPingRefs.delete(chatId); }
   });
-  // add pings for new chats
   wanted.forEach((chatId) => {
     if(rtdbPingRefs.has(chatId)) return;
     const ref = rtdb.ref('pings/' + chatId);
     ref.on('value', (snap) => {
       const val = snap.val();
       if(!val || !val.at) return;
-      // A ping fired from someone else means: don't wait for the Firestore
-      // chat-list snapshot, go grab the latest chat doc right now.
       if(val.from && val.from === currentUser.uid) return;
       db.collection('chats').doc(chatId).get().then((docSnap) => {
         if(docSnap.exists) refreshSingleChatRow(chatId, docSnap.data());
@@ -2884,18 +3426,10 @@ function syncSidebarPings(chatIds){
   });
 }
 
-// Cache of the last rendered row data, keyed by chatId, so a ping-triggered
-// refresh of one row doesn't require re-rendering the whole list.
 let chatRowCache = new Map();
 
 function listenChatList(){
   if(unsubChatList) unsubChatList();
-  // Only suppress notifications on the very first-ever load (before we have
-  // any seen-timestamp history). A reconnect-triggered restart of this
-  // listener (see the 'online' handler above) must NOT reset this, or the
-  // very next real message after a network blip gets silently swallowed as
-  // if it were "already seen" — which was one of the reasons notifications
-  // seemed to randomly not fire.
   if(lastSeenTimestamps.size === 0) chatListFirstLoad = true;
   unsubChatList = db.collection('chats')
     .where('members', 'array-contains', currentUser.uid)
@@ -2906,7 +3440,6 @@ function listenChatList(){
         chatRowCache.clear();
         detachSidebarPings();
         $('chat-list').innerHTML = `<div class="empty-chats">No conversations yet. Search a username above to say hi, or start a group.</div>`;
-        // If we were sitting in a chat we just got removed from (kicked / group deleted / DM closed), bounce out.
         if(activeChatId){ closeActiveChat(); }
         return;
       }
@@ -2946,7 +3479,6 @@ function listenChatList(){
       syncSidebarPings(rows.map(r => r.id));
       detectNewMessageNotifications(rows);
 
-      // Keep the currently-open chat's header in sync (name/avatar/members changing live).
       if(activeChatId){
         const current = rows.find(r => r.id === activeChatId);
         if(current) syncActiveChatHeader(current.chat);
@@ -3008,8 +3540,6 @@ function renderChatList(rows){
   });
 }
 
-// Re-render just the one row that got pinged, using a fresh Firestore read,
-// without waiting for the whole chats-listener snapshot to arrive.
 function refreshSingleChatRow(chatId, chat){
   if(!chat || !chat.members) return;
   const info = chatDisplayInfo(chat);
@@ -3108,12 +3638,8 @@ function openChat(chatId, chatData){
   unsubChatDoc = db.collection('chats').doc(activeChatId).onSnapshot(snap => {
     const chat = snap.exists ? snap.data() : null;
     if(!chat){
-      // Group was deleted, DM was closed, or we lost access.
       return;
     }
-    // Keep local activeChat state (members/name/avatar/owner) fresh so the
-    // header, group-info modal, and permission checks (e.g. "am I the owner")
-    // reflect live changes made by other members without needing to reopen.
     const info2 = chatDisplayInfo(chat);
     activeChat.members = chat.members;
     activeChat.name = info2.name;
@@ -3125,13 +3651,6 @@ function openChat(chatId, chatData){
     }
   }, err => console.error('Chat doc listener error:', err));
 
-  // Capture which chat this specific messages-listener closure belongs to.
-  // Firestore listeners aren't guaranteed to stop firing the instant you
-  // call unsubscribe() — an in-flight snapshot for the PREVIOUS chat can
-  // still land right as you switch into a new one. Without this guard, that
-  // stray snapshot could stamp messages in the chat you just left as "read"
-  // (since the tab is still visible), which is what caused messages to show
-  // as Read even while you were looking at a completely different chat.
   const listenerChatId = activeChatId;
   unsubMessages = db.collection('chats').doc(activeChatId).collection('messages')
     .orderBy('createdAt', 'asc')
@@ -3146,7 +3665,6 @@ function openChat(chatId, chatData){
       toast('Trouble loading messages — retrying…');
     });
 
-  // RTDB typing signal for this chat — near-instant, no Firestore write cost.
   const typingRef = rtdb.ref('typing/' + chatId);
   const typingHandler = typingRef.on('value', (snap) => {
     if(activeChatId !== chatId) return;
@@ -3154,8 +3672,6 @@ function openChat(chatId, chatData){
   });
   unsubActiveTyping = () => typingRef.off('value', typingHandler);
 
-  // RTDB read-receipt signal — near-instant "seen" ticks without waiting on
-  // a Firestore write to propagate back down to the sender.
   const readsRef = rtdb.ref('reads/' + chatId);
   const readsHandler = readsRef.on('value', (snap) => {
     if(activeChatId !== chatId) return;
@@ -3164,7 +3680,6 @@ function openChat(chatId, chatData){
   });
   unsubActiveReads = () => readsRef.off('value', readsHandler);
 
-  // Mark my own read-position immediately on open.
   rtdb.ref('reads/' + chatId + '/' + currentUser.uid).set(firebase.database.ServerValue.TIMESTAMP).catch(()=>{});
 
   highlightActiveRow();
@@ -3207,8 +3722,6 @@ function renderActiveChatHeader(){
   $('close-dm-btn').style.display = activeChat.isGroup ? 'none' : 'flex';
 }
 
-// Called from the chat-list snapshot to keep the open chat's header (name,
-// avatar, member count) live-updated when another member edits group info.
 function syncActiveChatHeader(chatData){
   if(!activeChat) return;
   const info = chatDisplayInfo(chatData);
@@ -3246,15 +3759,11 @@ function markMessagesRead(docs){
     }
   });
   if(any) batch.commit().catch(()=>{});
-  // Also bump the RTDB read marker so the other side's "Read" tick appears
-  // instantly instead of waiting on this Firestore batch to propagate.
   if(activeChatId){
     rtdb.ref('reads/' + activeChatId + '/' + currentUser.uid).set(firebase.database.ServerValue.TIMESTAMP).catch(()=>{});
   }
 }
 
-// Re-applies "Read"/"Delivered" status on the last message row using the
-// RTDB reads cache, without a full re-render of every message.
 function applyRtdbReadTicks(){
   if(!activeChat || !lastMessageDocsCache || !lastMessageDocsCache.length) return;
   const wrap = $('messages');
@@ -3280,7 +3789,20 @@ function renderMessages(messages){
   wrap.innerHTML = '';
   let lastMine = null;
   let lastSenderId = null;
+  let lastClusterMs = null;
+
   messages.forEach(m => {
+    const createdMs = m.createdAt && m.createdAt.toMillis ? m.createdAt.toMillis() : (m.createdAt ? new Date(m.createdAt).getTime() : null);
+    if(createdMs != null){
+      if(lastClusterMs === null || (createdMs - lastClusterMs) > CLUSTER_GAP_MS){
+        const sep = document.createElement('div');
+        sep.className = 'date-separator';
+        sep.textContent = fmtClusterLabel(m.createdAt);
+        wrap.appendChild(sep);
+      }
+      lastClusterMs = createdMs;
+    }
+
     if(m.system){
       const row = document.createElement('div');
       row.className = 'msg-row system';
@@ -3303,7 +3825,34 @@ function renderMessages(messages){
     lastSenderId = m.senderId;
     const bubble = document.createElement('div');
     bubble.className = 'bubble' + (m.photoURL ? ' has-photo' : '') + (m.pending ? ' pending' : '') + (m.failed ? ' failed' : '');
-    if(m.photoURL){
+
+    // ---- Uploading photo: show a progress ring over a blurred local preview ----
+    if(m.uploading && m.localPreviewUrl){
+      const progWrap = document.createElement('div');
+      progWrap.className = 'photo-progress-wrap';
+      const previewImg = document.createElement('img');
+      previewImg.className = 'msg-photo-preview';
+      previewImg.src = m.localPreviewUrl;
+      progWrap.appendChild(previewImg);
+
+      const overlay = document.createElement('div');
+      overlay.className = 'photo-progress-overlay';
+      const pct = Math.max(0, Math.min(100, m.uploadProgress || 0));
+      const radius = 16.5;
+      const circumference = 2 * Math.PI * radius;
+      const offset = circumference * (1 - pct / 100);
+      overlay.innerHTML = `
+        <div class="photo-progress-ring">
+          <svg viewBox="0 0 40 40">
+            <circle class="track" cx="20" cy="20" r="${radius}"></circle>
+            <circle class="fill" cx="20" cy="20" r="${radius}" stroke-dasharray="${circumference}" stroke-dashoffset="${offset}"></circle>
+          </svg>
+        </div>
+        <div class="photo-progress-pct">${pct}%</div>
+      `;
+      progWrap.appendChild(overlay);
+      bubble.appendChild(progWrap);
+    } else if(m.photoURL){
       const img = document.createElement('img');
       img.className = 'msg-photo';
       img.src = m.photoURL;
@@ -3321,11 +3870,14 @@ function renderMessages(messages){
       bubble.textContent = m.text;
     }
     row.appendChild(bubble);
+
     const time = document.createElement('div');
     time.className = 'msg-time';
     time.dataset.mid = m.id;
-    const canUnsend = m.senderId === currentUser.uid && !m.pending && !m.failed;
-    if(m.failed){
+    const canUnsend = m.senderId === currentUser.uid && !m.pending && !m.failed && !m.uploading;
+    if(m.uploading){
+      time.textContent = 'Uploading…';
+    } else if(m.failed){
       const retrySpan = document.createElement('span');
       retrySpan.className = 'retry-link';
       retrySpan.dataset.mid = m.id;
@@ -3334,20 +3886,20 @@ function renderMessages(messages){
       time.appendChild(retrySpan);
     } else if(m.pending){
       time.textContent = 'Sending…';
-    } else {
-      time.appendChild(document.createTextNode(fmtTime(m.createdAt)));
-      if(canUnsend){
-        const unsendSpan = document.createElement('span');
-        unsendSpan.className = 'unsend-link';
-        unsendSpan.dataset.mid = m.id;
-        unsendSpan.textContent = 'Unsend';
-        time.appendChild(document.createTextNode(' '));
-        time.appendChild(unsendSpan);
-      }
+    } else if(canUnsend && m.senderId === currentUser.uid){
+      // Non-last sent messages: show the actual send time plus Unsend.
+      time.appendChild(document.createTextNode(fmtTime(m.createdAt) + ' '));
+      const unsendSpan = document.createElement('span');
+      unsendSpan.className = 'unsend-link';
+      unsendSpan.dataset.mid = m.id;
+      unsendSpan.textContent = 'Unsend';
+      time.appendChild(unsendSpan);
+    } else if(m.senderId !== currentUser.uid){
+      time.textContent = fmtTime(m.createdAt);
     }
     row.appendChild(time);
     wrap.appendChild(row);
-    if(m.senderId === currentUser.uid && !m.pending && !m.failed) lastMine = {m, row, time};
+    if(m.senderId === currentUser.uid && !m.pending && !m.failed && !m.uploading) lastMine = {m, row, time};
   });
   if(lastMine){
     let readLabel = 'Delivered';
@@ -3360,7 +3912,12 @@ function renderMessages(messages){
       readLabel = readCount >= othersCount && othersCount > 0 ? 'Read by all' : readCount > 0 ? `Read by ${readCount}` : 'Delivered';
     }
     lastMine.time.textContent = '';
-    lastMine.time.appendChild(document.createTextNode(fmtTime(lastMine.m.createdAt) + '  ·  '));
+    // Show the actual timestamp AND the read/delivered status together,
+    // instead of the status silently replacing the time.
+    const timeSpan = document.createElement('span');
+    timeSpan.textContent = fmtTime(lastMine.m.createdAt);
+    lastMine.time.appendChild(timeSpan);
+    lastMine.time.appendChild(document.createTextNode(' · '));
     const label = document.createElement('span');
     label.className = 'read-status-label';
     label.textContent = readLabel;
@@ -3372,9 +3929,6 @@ function renderMessages(messages){
     unsendSpan.textContent = 'Unsend';
     lastMine.time.appendChild(unsendSpan);
   }
-  // Bind click handlers once, after all DOM has settled — every node is
-  // built explicitly with createElement (no innerHTML rewrites), so a
-  // single binding pass reliably wires up every retry/unsend link.
   wrap.querySelectorAll('.retry-link').forEach(link => {
     link.addEventListener('click', () => retryMessage(link.dataset.mid));
   });
@@ -3383,14 +3937,9 @@ function renderMessages(messages){
   });
   if(typingEl) wrap.appendChild(typingEl);
   wrap.scrollTop = wrap.scrollHeight + 999;
-  // Apply any read ticks we already know about from RTDB immediately.
   applyRtdbReadTicks();
 }
 
-// Renders the typing indicator from the RTDB typing/{chatId} snapshot.
-// This replaces the old Firestore-chat-doc-based typing field: RTDB pushes
-// typing state to listeners in tens of milliseconds instead of Firestore's
-// couple hundred, which is most of what makes the chat feel "live".
 function renderTypingFromRtdb(typingMap){
   const wrap = $('messages');
   let el = wrap.querySelector('.typing-row');
@@ -3417,75 +3966,24 @@ $('back-btn').addEventListener('click', () => {
   $('app').classList.remove('chat-open');
 });
 
-function toast(title, body = '', duration = 3000) {
-  const container = document.getElementById('toast-stack');
-  if (!container) return;
-
-  const el = document.createElement('div');
-  el.className = 'toast';
-  
-  el.innerHTML = `
-    <div class="toast-text">
-      <div class="toast-title">${title}</div>
-      ${body ? `<div class="toast-body">${body}</div>` : ''}
-    </div>
-  `;
-
-  container.appendChild(el);
-
-  // Trigger CSS entry animation
-  requestAnimationFrame(() => el.classList.add('show'));
-
-  // Remove toast after duration
-  setTimeout(() => {
-    el.classList.remove('show');
-    setTimeout(() => el.remove(), 200); // Wait for fade-out transition
-  }, duration);
-}
-
-// Confirmation Toast with Action Buttons
-function toastConfirm(title, onConfirm) {
-  const container = document.getElementById('toast-stack');
-  if (!container) return;
-
-  const el = document.createElement('div');
-  el.className = 'toast show'; // Show immediately
-  
-  el.innerHTML = `
-    <div class="toast-text">
-      <div class="toast-title">${title}</div>
-    </div>
-    <button class="toast-btn-confirm" style="border:none; padding:5px 10px; border-radius:6px; cursor:pointer; font-size:12px;">Confirm</button>
-    <button class="toast-btn-cancel" style="border:none; padding:5px 10px; border-radius:6px; cursor:pointer; font-size:12px;">Cancel</button>
-  `;
-
-  container.appendChild(el);
-
-  // Button Listeners
-  const close = () => {
-    el.classList.remove('show');
-    setTimeout(() => el.remove(), 200);
-  };
-
-  el.querySelector('.toast-btn-confirm').onclick = () => { close(); onConfirm(); };
-  el.querySelector('.toast-btn-cancel').onclick = close;
-}
-
-/* ================= Updated unsendMessage Function ================= */
+/* ================= Unsend message ================= */
 async function unsendMessage(mid) {
   if (!activeChatId || !mid) return;
-
-  toastConfirm('Unsend this message?', async () => {
-    const chatId = activeChatId;
-    try {
-      await db.collection('chats').doc(chatId).collection('messages').doc(mid).delete();
-      await refreshChatPreview(chatId);
-      pingChat(chatId, { from: currentUser.uid });
-      toast('Message unsent');
-    } catch (err) {
-      toast('Could not unsend', err.message);
-    }
+  const ok = await alertConfirm('Unsend this message?', 'This removes it for everyone in the conversation.', {
+    destructiveLabel: 'Unsend',
+    cancelLabel: 'Cancel'
   });
+  if(!ok) return;
+
+  const chatId = activeChatId;
+  try {
+    await db.collection('chats').doc(chatId).collection('messages').doc(mid).delete();
+    await refreshChatPreview(chatId);
+    pingChat(chatId, { from: currentUser.uid });
+    toast('Message unsent');
+  } catch (err) {
+    toast('Could not unsend: ' + err.message);
+  }
 }
 async function refreshChatPreview(chatId){
   try{
@@ -3511,38 +4009,33 @@ async function refreshChatPreview(chatId){
 /* ================= Close DM (hard delete, both sides) ================= */
 async function closeDm(chatId, name){
   if(!chatId) return;
-  toastConfirm(`Close conversation with ${name}? This deletes it for both of you — permanently.`, async () => {
-    try{
-      await hardDeleteChat(chatId);
-      if(activeChatId === chatId) closeActiveChat();
-      toast('Conversation closed');
-    }catch(err){
-      toast('Could not close conversation: ' + err.message);
-    }
+  const ok = await alertConfirm(`Close conversation with ${name}?`, 'This deletes it for both of you — permanently.', {
+    destructiveLabel: 'Delete',
+    cancelLabel: 'Cancel'
   });
+  if(!ok) return;
+  try{
+    await hardDeleteChat(chatId);
+    if(activeChatId === chatId) closeActiveChat();
+    toast('Conversation closed');
+  }catch(err){
+    toast('Could not close conversation: ' + err.message);
+  }
 }
 
-// Deletes the chat doc, every message in its subcollection, and the
-// associated RTDB signal nodes (pings/typing/reads). Firestore security
-// rules should allow any member of `members` to delete the chat doc and its
-// messages subcollection for this to succeed from the client; if your rules
-// are locked down tighter than that, this delete should be moved server-side
-// (e.g. a Cloud Function triggered off a "closedBy" field) instead.
 async function hardDeleteChat(chatId){
   const chatRef = db.collection('chats').doc(chatId);
   const msgsSnap = await chatRef.collection('messages').get();
-  // Firestore batches cap at 500 writes; chunk defensively.
   const docs = msgsSnap.docs;
   for(let i = 0; i < docs.length; i += 450){
     const batch = db.batch();
     docs.slice(i, i + 450).forEach(d => batch.delete(d.ref));
-    batch.delete(chatRef); // safe to include repeatedly across chunks; last one wins
+    batch.delete(chatRef);
     await batch.commit();
   }
   if(docs.length === 0){
     await chatRef.delete();
   }
-  // Clean up RTDB signal nodes for this chat so nothing lingers/leaks.
   await Promise.all([
     rtdb.ref('pings/' + chatId).remove().catch(()=>{}),
     rtdb.ref('typing/' + chatId).remove().catch(()=>{}),
@@ -3552,13 +4045,6 @@ async function hardDeleteChat(chatId){
   lastSeenTimestamps.delete(chatId);
 }
 
-// Previously this was a complete no-op disguised as a retry: it just
-// toggled the Firestore network connection off and on and showed
-// "Retrying…", without ever reading the failed message's content or
-// calling send again. A "failed" message would stay failed forever no
-// matter how many times you clicked Retry. This version actually reads the
-// failed doc's original text/photo, removes the failed placeholder, and
-// re-sends it for real through the normal send path.
 async function retryMessage(mid){
   if(!activeChatId || !mid) return;
   const ref = db.collection('chats').doc(activeChatId).collection('messages').doc(mid);
@@ -3604,7 +4090,7 @@ function isGroupOwner(){
 async function openGroupInfo(){
   if(!activeChat || !activeChat.isGroup) return;
   $('ginfo-name-input').value = activeChat.name;
-  $('ginfo-name-input').disabled = !isGroupOwner() && false; // any member may rename; kept explicit for clarity
+  $('ginfo-name-input').disabled = !isGroupOwner() && false;
   renderGroupInfoAvatar();
   await renderGroupInfoMembers();
   $('group-info-modal').classList.add('show');
@@ -3664,15 +4150,21 @@ async function renderGroupInfoMembers(){
 $('ginfo-close-btn').addEventListener('click', () => $('group-info-modal').classList.remove('show'));
 
 let ginfoAvatarFile = null;
-$('ginfo-avatar-input').addEventListener('change', (e) => {
+$('ginfo-avatar-input').addEventListener('change', async (e) => {
   const file = e.target.files[0];
+  e.target.value = '';
   if(!file) return;
-  ginfoAvatarFile = file;
-  const url = URL.createObjectURL(file);
-  $('ginfo-avatar-stack').style.display = 'none';
-  const img = $('ginfo-avatar-img');
-  img.style.display = 'block';
-  img.src = url;
+  try{
+    const cropped = await openCropModal(file);
+    ginfoAvatarFile = cropped;
+    const url = URL.createObjectURL(cropped);
+    $('ginfo-avatar-stack').style.display = 'none';
+    const img = $('ginfo-avatar-img');
+    img.style.display = 'block';
+    img.src = url;
+  }catch(err){
+    if(err.message !== 'cancelled') toast('Could not process image: ' + err.message);
+  }
 });
 
 $('ginfo-save-btn').addEventListener('click', async () => {
@@ -3712,7 +4204,11 @@ $('ginfo-save-btn').addEventListener('click', async () => {
 
 $('ginfo-leave-btn').addEventListener('click', async () => {
   if(!activeChatId || !activeChat || !activeChat.isGroup) return;
-  if(!confirm(`Leave "${activeChat.name}"? You won't be able to see this conversation anymore.`)) return;
+  const ok = await alertConfirm(`Leave "${activeChat.name}"?`, "You won't be able to see this conversation anymore.", {
+    destructiveLabel: 'Leave',
+    cancelLabel: 'Cancel'
+  });
+  if(!ok) return;
   const chatId = activeChatId;
   const leavingOwnerUid = activeChat.ownerId;
   const remainingMembers = activeChat.members.filter(u => u !== currentUser.uid);
@@ -3722,8 +4218,6 @@ $('ginfo-leave-btn').addEventListener('click', async () => {
       [`unreadCount.${currentUser.uid}`]: FieldValue.delete(),
       [`typing.${currentUser.uid}`]: FieldValue.delete()
     };
-    // If the owner leaves, hand ownership to the next remaining member so
-    // the group isn't left ownerless (which would block removes/renames).
     if(leavingOwnerUid === currentUser.uid && remainingMembers.length > 0){
       update.ownerId = remainingMembers[0];
     }
@@ -3741,7 +4235,11 @@ $('ginfo-leave-btn').addEventListener('click', async () => {
 
 async function removeMemberFromGroup(uid, name){
   if(!activeChatId || !activeChat || !isGroupOwner()) return;
-  if(!confirm(`Remove ${name} from the group?`)) return;
+  const ok = await alertConfirm(`Remove ${name} from the group?`, '', {
+    destructiveLabel: 'Remove',
+    cancelLabel: 'Cancel'
+  });
+  if(!ok) return;
   try{
     await db.collection('chats').doc(activeChatId).update({
       members: FieldValue.arrayRemove(uid),
@@ -3873,21 +4371,100 @@ function attachComposerHandlers(){
     const file = e.target.files[0];
     attachInput.value = '';
     if(!file || !activeChatId) return;
-    attachBtn.classList.add('uploading');
-    try{
-      const photoURL = await withTimeout(uploadToImgbb(file), 20000, 'Photo upload');
-      await sendMessageInternal({ text: '', photoURL });
-    }catch(err){
-      toast('Photo failed to send: ' + err.message);
-    }finally{
-      attachBtn.classList.remove('uploading');
-    }
+    await sendPhotoMessage(file);
   });
 }
 
-// Typing state now lives purely in RTDB (see openChat's typing listener) —
-// this is a plain low-latency key write instead of a Firestore doc merge,
-// which is both faster and cheaper.
+/*
+ * Sends a photo message with a visible in-bubble progress indicator.
+ * Writes a local optimistic "uploading" message doc immediately (with a
+ * blurred local object-URL preview + a progress ring), updates its
+ * uploadProgress field as the XHR reports progress, then swaps it for the
+ * real photoURL once the upload finishes and the message is actually sent.
+ */
+async function sendPhotoMessage(file){
+  if(!file || !activeChatId || !activeChat) return;
+  const attachBtn = $('attach-btn');
+  attachBtn.classList.add('uploading');
+
+  const chatId = activeChatId;
+  const chatRef = db.collection('chats').doc(chatId);
+  const msgRef = chatRef.collection('messages').doc();
+  const localPreviewUrl = URL.createObjectURL(file);
+
+  // Optimistic local render: show the bubble with a progress ring right away
+  // by rendering it directly into the DOM (not yet in Firestore), so the
+  // user sees upload feedback with zero latency.
+  renderOptimisticUploadingMessage(msgRef.id, localPreviewUrl, 0);
+
+  try{
+    const photoURL = await uploadToImgbbWithProgress(file, (pct) => {
+      updateOptimisticUploadingProgress(msgRef.id, pct);
+    });
+
+    const msgPayload = {
+      text: '',
+      photoURL,
+      senderId: currentUser.uid,
+      senderName: myDoc.displayName,
+      createdAt: FieldValue.serverTimestamp(),
+      readBy: [currentUser.uid]
+    };
+    const chatUpdate = {
+      members: activeChat.members,
+      isGroup: activeChat.isGroup,
+      lastMessage: '📷 Photo',
+      lastMessageAt: FieldValue.serverTimestamp(),
+      lastSenderId: currentUser.uid,
+      lastSenderName: myDoc.displayName,
+      [`unreadCount.${currentUser.uid}`]: 0
+    };
+    activeChat.members.forEach(uid => {
+      if(uid !== currentUser.uid) chatUpdate[`unreadCount.${uid}`] = FieldValue.increment(1);
+    });
+    if(activeChat.isGroup) chatUpdate.groupName = activeChat.name;
+
+    const batch = db.batch();
+    batch.set(msgRef, msgPayload);
+    batch.set(chatRef, chatUpdate, {merge:true});
+    pingChat(chatId, { from: currentUser.uid });
+    await batch.commit();
+  }catch(err){
+    toast('Photo failed to send: ' + err.message);
+  }finally{
+    removeOptimisticUploadingMessage(msgRef.id);
+    URL.revokeObjectURL(localPreviewUrl);
+    attachBtn.classList.remove('uploading');
+  }
+}
+
+// Local-only optimistic uploading-message state, keyed by the msgRef.id
+// that will become the real Firestore doc once the upload completes. Kept
+// separate from the Firestore-backed message list so a slow upload doesn't
+// need a Firestore write per progress tick.
+let optimisticUploads = new Map();
+function renderOptimisticUploadingMessage(id, localPreviewUrl, pct){
+  optimisticUploads.set(id, { id, uploading: true, localPreviewUrl, uploadProgress: pct, senderId: currentUser.uid, createdAt: null });
+  rerenderWithOptimistic();
+}
+function updateOptimisticUploadingProgress(id, pct){
+  const entry = optimisticUploads.get(id);
+  if(!entry) return;
+  entry.uploadProgress = pct;
+  rerenderWithOptimistic();
+}
+function removeOptimisticUploadingMessage(id){
+  optimisticUploads.delete(id);
+  rerenderWithOptimistic();
+}
+function rerenderWithOptimistic(){
+  if(!lastMessageDocsCache) return;
+  const base = lastMessageDocsCache.map(d => ({id:d.id, ...d.data()}));
+  const extra = [...optimisticUploads.values()];
+  renderMessages([...base, ...extra]);
+}
+
+// Typing state now lives purely in RTDB (see openChat's typing listener).
 function setTyping(val){
   if(!activeChatId) return;
   rtdb.ref('typing/' + activeChatId + '/' + currentUser.uid).set(val).catch(()=>{});
@@ -3942,12 +4519,6 @@ async function sendMessageInternal({ text, photoURL }){
   batch.set(msgRef, msgPayload);
   batch.set(chatRef, chatUpdate, {merge:true});
 
-  // Fire the RTDB ping the instant we start sending — don't wait on the
-  // Firestore commit. This is the main speed win: every other tab/device
-  // watching this chat (via syncSidebarPings / the active-chat ping) wakes
-  // up and re-checks Firestore in well under 100ms, instead of waiting on
-  // Firestore's own listener fan-out latency. Worst case if the Firestore
-  // write then fails, the ping just caused an early no-op re-check.
   pingChat(chatId, { from: currentUser.uid });
 
   try{
@@ -3955,10 +4526,6 @@ async function sendMessageInternal({ text, photoURL }){
   }catch(err){
     console.error('Send failed:', err);
     toast((navigator.onLine ? 'Message failed to send: ' : 'You\'re offline — ') + err.message);
-    // Previously this just toasted and gave up — the message vanished with
-    // no way to recover it, and the "Retry" link elsewhere in the code had
-    // nothing to actually retry. Write a locally-visible failed message
-    // record instead, so there's a real doc for the Retry link to act on.
     try{
       await msgRef.set({ ...msgPayload, failed: true, createdAt: FieldValue.serverTimestamp() });
     }catch(e2){
@@ -3981,11 +4548,17 @@ $('open-profile-btn').addEventListener('click', () => {
 });
 $('modal-cancel-btn').addEventListener('click', () => $('profile-modal').classList.remove('show'));
 $('modal-username').addEventListener('input', () => debounceUsernameCheck('modal'));
-$('modal-avatar-input').addEventListener('change', (e) => {
+$('modal-avatar-input').addEventListener('change', async (e) => {
   const file = e.target.files[0];
+  e.target.value = '';
   if(!file) return;
-  modalAvatarFile = file;
-  $('modal-avatar-preview').src = URL.createObjectURL(file);
+  try{
+    const cropped = await openCropModal(file);
+    modalAvatarFile = cropped;
+    $('modal-avatar-preview').src = URL.createObjectURL(cropped);
+  }catch(err){
+    if(err.message !== 'cancelled') toast('Could not process image: ' + err.message);
+  }
 });
 
 $('modal-save-btn').addEventListener('click', async () => {
