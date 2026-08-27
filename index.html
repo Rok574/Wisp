@@ -2301,6 +2301,9 @@ db.enableNetwork().catch(() => {});
 
 const PROXY_URL = "https://script.google.com/macros/s/AKfycbx1AlxWEdXqRt4FaEocTUmuvVGew50naml8Ot4M-wWxmUfksRdnJx9a98beRNTCHwNB8Q/exec";
 
+/**
+ * Standard fetch upload to Google Apps Script proxy -> Catbox -> Padlet Proxy
+ */
 async function uploadToImgbb(file) {
   if (!file || !file.type || !file.type.startsWith('image/')) {
     throw new Error('Please select a valid image file.');
@@ -2313,10 +2316,7 @@ async function uploadToImgbb(file) {
 
   const base64Image = await new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result;
-      resolve(result.substring(result.indexOf(',') + 1));
-    };
+    reader.onload = () => resolve(reader.result.substring(reader.result.indexOf(',') + 1));
     reader.onerror = (err) => reject(err);
     reader.readAsDataURL(file);
   });
@@ -2343,10 +2343,11 @@ async function uploadToImgbb(file) {
     const data = await response.json();
 
     if (!data.success) {
-      const msg = (data.error && data.error.message) ? data.error.message : (data.error || 'Upload failed');
+      const msg = typeof data.error === 'object' ? data.error.message : (data.error || 'Upload failed');
       throw new Error(msg);
     }
 
+    // Returns the proxied Padlet WebP URL
     return data.data.url;
 
   } catch (err) {
@@ -2354,57 +2355,91 @@ async function uploadToImgbb(file) {
   }
 }
 
-/* ---- Upload variant that reports real upload progress via XHR, used for
-   chat photo attachments so the composer/message can show a progress ring
-   instead of just a spinner-less "uploading" state. ---- */
+/**
+ * Progress variant using Fetch + ReadableStream reader simulation.
+ * (Since Google Apps Script forces a 302 redirect that breaks XHR POST responses, 
+ * fetch is used here to avoid CORS/redirect failure, while simulating high-accuracy progress updates)
+ */
 function uploadToImgbbWithProgress(file, onProgress) {
   return new Promise((resolve, reject) => {
     if (!file || !file.type || !file.type.startsWith('image/')) {
       reject(new Error('Please select a valid image file.'));
       return;
     }
+
     const MAX_SIZE_MB = 35;
     if (file.size > MAX_SIZE_MB * 1024 * 1024) {
       reject(new Error(`Image size exceeds ${MAX_SIZE_MB}MB limit for Apps Script proxy.`));
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result;
-      const base64Image = result.substring(result.indexOf(',') + 1);
-      const extFromType = (file.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
-      const safeName = (file.name && file.name.trim()) ? file.name.trim() : `img_${Date.now()}.${extFromType}`;
 
-      const xhr = new XMLHttpRequest();
-      xhr.open('POST', PROXY_URL, true);
-      xhr.setRequestHeader('Content-Type', 'text/plain;charset=utf-8');
-      xhr.upload.onprogress = (evt) => {
-        if (evt.lengthComputable && onProgress) {
-          onProgress(Math.min(99, Math.round((evt.loaded / evt.total) * 100)));
-        }
-      };
-      xhr.onload = () => {
-        try {
-          const data = JSON.parse(xhr.responseText);
-          if (!data.success) {
-            const msg = (data.error && data.error.message) ? data.error.message : (data.error || 'Upload failed');
-            reject(new Error(msg));
-            return;
-          }
-          if (onProgress) onProgress(100);
-          resolve(data.data.url);
-        } catch (e) {
-          reject(new Error('Invalid response from upload proxy'));
-        }
-      };
-      xhr.onerror = () => reject(new Error('Network error during upload'));
-      xhr.send(JSON.stringify({ image: base64Image, mimeType: file.type, fileName: safeName }));
+    const reader = new FileReader();
+
+    // Track file conversion progress (0% - 30%)
+    reader.onprogress = (evt) => {
+      if (evt.lengthComputable && onProgress) {
+        const percent = Math.round((evt.loaded / evt.total) * 30);
+        onProgress(percent);
+      }
     };
+
+    reader.onload = async () => {
+      try {
+        if (onProgress) onProgress(35);
+
+        const base64Image = reader.result.substring(reader.result.indexOf(',') + 1);
+        const extFromType = (file.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
+        const safeName = (file.name && file.name.trim()) ? file.name.trim() : `img_${Date.now()}.${extFromType}`;
+
+        // Simulated progression during network transit to Google Apps Script (35% - 85%)
+        let progressInterval = setInterval(() => {
+          if (onProgress) {
+            onProgress((prev) => {
+              const current = typeof prev === 'number' ? prev : 35;
+              return current < 85 ? current + 5 : current;
+            });
+          }
+        }, 300);
+
+        const response = await fetch(PROXY_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({
+            image: base64Image,
+            mimeType: file.type,
+            fileName: safeName
+          }),
+          redirect: 'follow'
+        });
+
+        clearInterval(progressInterval);
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+
+        if (onProgress) onProgress(95);
+
+        const data = await response.json();
+
+        if (!data.success) {
+          const msg = typeof data.error === 'object' ? data.error.message : (data.error || 'Upload failed');
+          reject(new Error(msg));
+          return;
+        }
+
+        if (onProgress) onProgress(100);
+        resolve(data.data.url);
+
+      } catch (err) {
+        reject(new Error(`Upload proxy error: ${err.message}`));
+      }
+    };
+
     reader.onerror = (err) => reject(err);
     reader.readAsDataURL(file);
   });
 }
-
 /* ================= Helpers ================= */
 const $ = (id) => document.getElementById(id);
 
