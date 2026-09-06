@@ -69,6 +69,20 @@ html[data-theme="dark"] {
   color-scheme: dark;
 }
 
+html.low-power {
+  --glass-blur: blur(8px) saturate(120%);
+  --glass-shadow: 0 4px 14px 0 rgba(20, 20, 30, 0.16);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 html, body {
   transition: background-color 0.3s ease, color 0.3s ease;
 }
@@ -114,9 +128,7 @@ input {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--glass-surface);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
+  background: var(--bg);
   z-index: 100;
   flex-direction: column;
   gap: 14px;
@@ -125,12 +137,15 @@ input {
 .wisp-mark {
   width: 44px;
   height: 44px;
-  animation: breathe 1.6s ease-in-out infinite;
+  transform-origin: center center;
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  animation: breathe 1.8s ease-in-out infinite;
 }
 
 @keyframes breathe {
-  0%, 100% { transform: scale(1); opacity: 0.7; }
-  50% { transform: scale(1.12); opacity: 1; }
+  0%, 100% { transform: scale(1); opacity: 0.55; }
+  50% { transform: scale(1.08); opacity: 1; }
 }
 
 #loading p {
@@ -701,6 +716,7 @@ input {
   flex: 1;
   overflow-y: auto;
   padding: 4px 8px 12px;
+  -webkit-overflow-scrolling: touch;
 }
 
 .chat-row {
@@ -929,10 +945,12 @@ input {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overflow-anchor: none;
   padding: 22px 26px 8px;
   display: flex;
   flex-direction: column;
   gap: 4px;
+  -webkit-overflow-scrolling: touch;
 }
 
 .msg-row {
@@ -977,6 +995,13 @@ input {
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.04);
+}
+
+.bubble a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  word-break: break-all;
 }
 
 .bubble.pending {
@@ -1107,8 +1132,13 @@ input {
   margin: 4px 4px 10px;
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   flex-wrap: wrap;
+  min-height: 1px;
+}
+
+.msg-time.spacer {
+  margin: 2px 4px 6px;
 }
 
 .retry-link {
@@ -1487,9 +1517,6 @@ input[type="file"] {
   to { opacity: 1; }
 }
 
-/* Solid iOS-style sheet: no glass/blur bleed from the surrounding UI —
-   iOS alerts are a crisp opaque (or lightly translucent-but-blurred-only-
-   to-what's-behind-the-dimmer) card, not a see-through glass pane. */
 .alert-box {
   width: 100%;
   max-width: 270px;
@@ -1649,6 +1676,66 @@ input[type="file"] {
 .crop-zoom-row input[type="range"] {
   flex: 1;
   accent-color: var(--accent);
+}
+
+/* ---------- Photo lightbox (image preview) ---------- */
+.lightbox-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.88);
+  z-index: 500;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.lightbox-backdrop.show {
+  display: flex;
+  animation: alertBackdropIn 0.15s ease-out;
+}
+
+.lightbox-backdrop img {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  object-fit: contain;
+}
+
+.lightbox-close {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.12);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(10px);
+}
+
+.lightbox-close svg {
+  width: 20px;
+  height: 20px;
+}
+
+.lightbox-open-link {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 600;
+  background: rgba(255,255,255,0.12);
+  padding: 8px 16px;
+  border-radius: 20px;
+  backdrop-filter: blur(10px);
+  text-decoration: none;
 }
 
 /* Responsive */
@@ -1977,6 +2064,23 @@ input[type="file"] {
   font-family: inherit;
   font-size: inherit;
 }
+
+.load-older-btn {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--glass-surface);
+  border: 1px solid var(--glass-border);
+  padding: 7px 14px;
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+
+.load-older-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+  color: var(--ink-faint);
+}
 </style>
 </head>
 <body>
@@ -2272,6 +2376,15 @@ input[type="file"] {
   </div>
 </div>
 
+<!-- Photo lightbox (image preview instead of opening a new tab) -->
+<div class="lightbox-backdrop" id="lightbox-backdrop">
+  <button class="lightbox-close" id="lightbox-close-btn" title="Close">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+  </button>
+  <img id="lightbox-img" src="" alt="Photo preview">
+  <a class="lightbox-open-link" id="lightbox-open-link" href="#" target="_blank" rel="noopener noreferrer">Open original</a>
+</div>
+
 <div class="toast-stack" id="toast-stack"></div>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -2443,6 +2556,33 @@ function uploadToImgbbWithProgress(file, onProgress) {
 /* ================= Helpers ================= */
 const $ = (id) => document.getElementById(id);
 
+/* ---- Low-power device detection (keeps blur/shadow light on weak hardware) ---- */
+(function detectLowPower(){
+  try{
+    const cores = navigator.hardwareConcurrency || 8;
+    const mem = navigator.deviceMemory; // undefined on browsers that don't report it (treated as unknown, not low)
+    const saveData = !!(navigator.connection && navigator.connection.saveData);
+    const isLow = cores <= 2 || (typeof mem === 'number' && mem <= 4) || saveData;
+    if(isLow) document.documentElement.classList.add('low-power');
+  }catch(e){ /* ignore — default to full quality */ }
+})();
+
+/* ---- Service worker (required for OS notifications to work on mobile) ---- */
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch((err) => {
+      console.error('Service worker registration failed:', err);
+    });
+    navigator.serviceWorker.addEventListener('message', (event) => {
+      if(event.data && event.data.type === 'open-chat' && event.data.chatId){
+        db.collection('chats').doc(event.data.chatId).get().then((snap) => {
+          if(snap.exists) openChat(event.data.chatId, snap.data());
+        }).catch(()=>{});
+      }
+    });
+  });
+}
+
 /* ---- Toasts (informational only — no action buttons; see alertConfirm() for confirmations) ---- */
 function toast(msg, opts){
   opts = opts || {};
@@ -2453,6 +2593,8 @@ function toast(msg, opts){
     const img = document.createElement('img');
     img.src = opts.avatar;
     img.alt = opts.title || '';
+    img.loading = 'lazy';
+    img.decoding = 'async';
     img.addEventListener('error', () => window.__avatarFallback(img));
     el.appendChild(img);
   }
@@ -2491,23 +2633,12 @@ function removeToast(el){
   el.classList.remove('show');
   setTimeout(() => el.remove(), 220);
 }
-// Updates the body text of a toast returned by toast() — used for live
-// upload-progress messages ("Uploading photo… 42%").
 function updateToastText(el, msg){
   if(!el || !el.parentNode) return;
   const body = el.querySelector('.toast-body') || el.querySelector('div');
   if(body) body.textContent = msg;
 }
 
-/* ---- iMessage-style alert dialog ----
-   Replaces window.confirm() and the old button-toast (toastConfirm) with a
-   proper centered modal dialog styled like an iOS action sheet/alert:
-   bold title, gray message, a divider, and pill-less full-width buttons
-   separated by vertical rules. Destructive actions render in red.
-
-   alertConfirm(title, message, { destructiveLabel, cancelLabel }) returns
-   a Promise<boolean> — true if the destructive/confirm button was tapped.
-*/
 let alertActiveResolver = null;
 function closeAlert(result){
   const backdrop = $('alert-backdrop');
@@ -2559,6 +2690,25 @@ document.addEventListener('keydown', (e) => {
   if(e.key === 'Escape' && $('alert-backdrop').classList.contains('show')) closeAlert(false);
 });
 
+/* ---- Photo lightbox (tap a photo to preview instead of navigating away) ---- */
+function openLightbox(url){
+  if(!url) return;
+  $('lightbox-img').src = url;
+  $('lightbox-open-link').href = url;
+  $('lightbox-backdrop').classList.add('show');
+}
+function closeLightbox(){
+  $('lightbox-backdrop').classList.remove('show');
+  $('lightbox-img').src = '';
+}
+$('lightbox-close-btn').addEventListener('click', closeLightbox);
+$('lightbox-backdrop').addEventListener('click', (e) => {
+  if(e.target === $('lightbox-backdrop')) closeLightbox();
+});
+document.addEventListener('keydown', (e) => {
+  if(e.key === 'Escape' && $('lightbox-backdrop').classList.contains('show')) closeLightbox();
+});
+
 const AVATAR_PALETTE = ['#5B5FEF','#34D399','#F59E0B','#EC4899','#06B6D4','#8B5CF6','#F97316','#10B981'];
 function hashSeed(str){
   let h = 0;
@@ -2605,6 +2755,26 @@ function escapeHtml(s){
   d.textContent = s == null ? '' : s;
   return d.innerHTML;
 }
+/**
+ * Escapes text, then wraps bare URLs in real <a> links.
+ * Runs escaping FIRST so this can never be used to inject markup.
+ */
+function linkifyToHtml(text){
+  const escaped = escapeHtml(text || '');
+  const urlRe = /((https?:\/\/|www\.)[^\s<]+)/gi;
+  return escaped.replace(urlRe, (match) => {
+    // strip common trailing punctuation so "check example.com." doesn't eat the period
+    let trail = '';
+    const trailMatch = match.match(/[.,!?;:)\]]+$/);
+    let core = match;
+    if(trailMatch){
+      trail = trailMatch[0];
+      core = match.slice(0, match.length - trail.length);
+    }
+    const href = core.startsWith('http') ? core : 'https://' + core;
+    return `<a href="${href}" target="_blank" rel="noopener noreferrer">${core}</a>${trail}`;
+  });
+}
 function fmtTime(ts){
   if(!ts) return '';
   const d = ts.toDate ? ts.toDate() : new Date(ts);
@@ -2619,7 +2789,6 @@ function fmtDayTime(ts){
   return d.toLocaleDateString([], {month:'short', day:'numeric'});
 }
 
-/* ---- iMessage-style date/time cluster label ---- */
 function startOfDay(d){
   const c = new Date(d);
   c.setHours(0,0,0,0);
@@ -2667,15 +2836,13 @@ function withTimeout(promise, ms, label){
   ]);
 }
 
+/* ---- Modal manager: keep only one modal-backdrop open at a time ---- */
+function closeAllModals(){
+  document.querySelectorAll('.modal-backdrop.show').forEach(m => m.classList.remove('show'));
+}
+
 /* ================= Crop modal ================= */
-/*
- * A minimal drag-to-pan + slider-to-zoom square cropper. Opens on any avatar
- * file selection (setup / profile / group), lets the user reposition and
- * zoom before committing, and resolves with a cropped square File (JPEG).
- * This replaces silently center-cropping or — worse — sending whatever the
- * OS/browser file picker happened to hand back.
- */
-let cropState = null; // { img, natW, natH, minScale, scale, offX, offY, stageSize, dragging, startX, startY, startOffX, startOffY }
+let cropState = null;
 let cropResolve = null;
 let cropReject = null;
 
@@ -2790,7 +2957,6 @@ function clampCropOffsets(){
     canvas.width = outSize;
     canvas.height = outSize;
     const ctx = canvas.getContext('2d');
-    // Map the visible stage square back to source-image pixel coordinates.
     const sx = -cropState.offX / cropState.scale;
     const sy = -cropState.offY / cropState.scale;
     const sSize = cropState.stageSize / cropState.scale;
@@ -2825,6 +2991,37 @@ let searchDebounce = null;
 let chatListFirstLoad = true;
 let lastSeenTimestamps = new Map();
 let lastMessageDocsCache = null;
+
+/* ---- Message pagination state (keeps long chat histories from choking low-end devices) ---- */
+const MSG_PAGE_SIZE = 40;
+let olderMessagesStatic = [];
+let earliestDocSnapshot = null;
+let usingStaticOlderAnchor = false;
+let allOlderLoaded = false;
+let loadingOlderMessages = false;
+let messagesErrorCount = 0;
+
+/* ---- Scroll-to-bottom tracking: only auto-scroll when the user is already near the bottom
+   (or right after we open/send), otherwise loading older history or a stray re-render
+   would yank the view around. ---- */
+let stickToBottom = true;
+const SCROLL_BOTTOM_THRESHOLD = 80;
+
+function isNearBottom(wrap){
+  return (wrap.scrollHeight - wrap.scrollTop - wrap.clientHeight) < SCROLL_BOTTOM_THRESHOLD;
+}
+function scrollMessagesToBottom(force){
+  const wrap = $('messages');
+  if(!wrap) return;
+  if(force || stickToBottom){
+    // rAF twice: once to let layout settle after innerHTML/appendChild swaps,
+    // once more for images/webfonts that can still be reflowing.
+    requestAnimationFrame(() => {
+      wrap.scrollTop = wrap.scrollHeight;
+      requestAnimationFrame(() => { wrap.scrollTop = wrap.scrollHeight; });
+    });
+  }
+}
 
 let rtdbPingRefs = new Map();
 let unsubActivePing = null;
@@ -2884,37 +3081,7 @@ $('theme-toggle-btn').addEventListener('click', () => {
   setThemeIcon();
 });
 
-/* ================= PWA / notifications ================= */
-let swRegistration = null;
-
-function registerServiceWorker(){
-  if(!('serviceWorker' in navigator)){
-    console.warn('Service workers are not supported in this browser context.');
-    return;
-  }
-  navigator.serviceWorker.register('./sw.js').then((reg) => {
-    swRegistration = reg;
-    let hasReloaded = false;
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if(hasReloaded) return;
-      hasReloaded = true;
-      toast('Updated — reloading…');
-      setTimeout(() => location.reload(), 600);
-    });
-  }).catch((err) => {
-    console.error('Service worker registration failed:', err);
-    toast('Notifications need a background service worker, which failed to load: ' + err.message);
-  });
-
-  navigator.serviceWorker.addEventListener('message', (event) => {
-    if(event.data && event.data.type === 'notification-click' && event.data.chatId){
-      db.collection('chats').doc(event.data.chatId).get().then((snap) => {
-        if(snap.exists) openChat(event.data.chatId, snap.data());
-      }).catch(()=>{});
-    }
-  });
-}
-
+/* ================= Notifications (Web Notifications API + service worker on mobile) ================= */
 function setNotifBellState(){
   const btn = $('notif-toggle-btn');
   if(!btn) return;
@@ -2926,7 +3093,6 @@ function setNotifBellState(){
 }
 
 function initNotifications(){
-  registerServiceWorker();
   setNotifBellState();
   const btn = $('notif-toggle-btn');
   if(!btn) return;
@@ -2937,6 +3103,17 @@ function initNotifications(){
       return;
     }
     if(Notification.permission === 'granted'){
+      // Fire a quick test notification so the user gets confirmation it actually works,
+      // instead of a silent no-op that looks broken.
+      try{
+        await showOsNotification({
+          avatar: myDoc ? myDoc.photoURL : undefined,
+          title: 'Wisp',
+          body: 'Notifications are on for this device.',
+          chatId: '__test__',
+          forceShow: true
+        });
+      }catch(e){ /* ignore */ }
       toast('Notifications are already on.');
       return;
     }
@@ -2950,32 +3127,47 @@ function initNotifications(){
   });
 }
 
-async function showOsNotification({avatar, title, body, chatId}){
+async function showOsNotification({avatar, title, body, chatId, forceShow}){
   if(!('Notification' in window) || Notification.permission !== 'granted') return;
-  if(chatId === activeChatId && document.visibilityState === 'visible') return;
+  if(!forceShow && chatId === activeChatId && document.visibilityState === 'visible') return;
+
+  const opts = {
+    body,
+    icon: avatar || undefined,
+    tag: 'wisp-chat-' + chatId,
+    data: { chatId }
+  };
+
   try{
-    if(swRegistration){
-      await swRegistration.showNotification(title, {
-        body,
-        icon: './icon-192.png',
-        badge: './icon-192.png',
-        tag: 'wisp-chat-' + chatId,
-        data: { chatId }
-      });
-    } else {
-      const n = new Notification(title, { body, icon: avatar || './icon-192.png' });
-      n.onclick = () => {
-        window.focus();
-        if(chatId){
-          db.collection('chats').doc(chatId).get().then((snap) => {
-            if(snap.exists) openChat(chatId, snap.data());
-          }).catch(()=>{});
-        }
-      };
+    // Mobile browsers require going through a service worker registration —
+    // the plain `new Notification()` constructor throws there. On desktop the
+    // service worker may take a moment to activate on first load, so fall back
+    // to the plain constructor if a ready SW isn't available yet.
+    if('serviceWorker' in navigator && navigator.serviceWorker.controller){
+      const reg = await navigator.serviceWorker.ready;
+      await reg.showNotification(title, opts);
+      return;
     }
+    const n = new Notification(title, opts);
+    n.onclick = () => {
+      window.focus();
+      if(chatId && chatId !== '__test__'){
+        db.collection('chats').doc(chatId).get().then((snap) => {
+          if(snap.exists) openChat(chatId, snap.data());
+        }).catch(()=>{});
+      }
+      n.close();
+    };
   }catch(err){
     console.error('Notification failed:', err);
-    toast('Could not show notification: ' + err.message);
+    // Last-resort fallback: some mobile browsers throw on `new Notification()`
+    // even without a controller; try the SW route once more before giving up.
+    try{
+      if('serviceWorker' in navigator){
+        const reg = await navigator.serviceWorker.ready;
+        await reg.showNotification(title, opts);
+      }
+    }catch(e2){ console.error('Notification fallback also failed:', e2); }
   }
 }
 
@@ -3289,7 +3481,7 @@ async function runSearch(q){
   }
   box.innerHTML = results.map(u => `
     <div class="result-row" data-uid="${u.uid}">
-      <img src="${u.photoURL}" alt="${escapeHtml(u.username)}" data-seed="${escapeHtml(u.username)}" onerror="window.__avatarFallback(this)">
+      <img src="${u.photoURL}" alt="${escapeHtml(u.username)}" data-seed="${escapeHtml(u.username)}" loading="lazy" decoding="async" onerror="window.__avatarFallback(this)">
       <div>
         <div class="rname">${escapeHtml(u.displayName)}</div>
         <div class="rhandle">@${escapeHtml(u.username)}</div>
@@ -3334,6 +3526,7 @@ async function startOrOpenDirectChat(partner){
 /* ================= New group modal ================= */
 let groupSelected = new Map();
 $('new-group-btn').addEventListener('click', () => {
+  closeAllModals();
   groupSelected.clear();
   $('group-name-input').value = '';
   $('group-search-input').value = '';
@@ -3372,7 +3565,7 @@ function renderGroupPicker(results){
   results.forEach(u => merged.set(u.uid, u));
   list.innerHTML = [...merged.values()].map(u => `
     <label class="group-picker-row">
-      <img src="${u.photoURL}" alt="${escapeHtml(u.username)}" data-seed="${escapeHtml(u.username)}" onerror="window.__avatarFallback(this)">
+      <img src="${u.photoURL}" alt="${escapeHtml(u.username)}" data-seed="${escapeHtml(u.username)}" loading="lazy" decoding="async" onerror="window.__avatarFallback(this)">
       <span class="gname">${escapeHtml(u.displayName)}</span>
       <input type="checkbox" data-uid="${u.uid}" ${groupSelected.has(u.uid) ? 'checked' : ''}>
     </label>`).join('');
@@ -3543,8 +3736,8 @@ function renderChatList(rows){
     <div class="chat-row ${r.id===activeChatId?'active':''}" data-id="${r.id}">
       <div class="chat-avatar-wrap">
         ${r.info.isGroup
-          ? `<div class="group-avatar-stack">${r.info.avatar ? `<img src="${r.info.avatar}" alt="${escapeHtml(r.info.name)}" onerror="this.remove()">` : initialsOf(r.info.name)}</div>`
-          : `<img src="${r.info.avatar}" alt="${escapeHtml(r.info.name)}" data-seed="${escapeHtml(r.info.partnerUid || r.info.name)}" onerror="window.__avatarFallback(this)">`}
+          ? `<div class="group-avatar-stack">${r.info.avatar ? `<img src="${r.info.avatar}" alt="${escapeHtml(r.info.name)}" loading="lazy" decoding="async" onerror="this.remove()">` : initialsOf(r.info.name)}</div>`
+          : `<img src="${r.info.avatar}" alt="${escapeHtml(r.info.name)}" data-seed="${escapeHtml(r.info.partnerUid || r.info.name)}" loading="lazy" decoding="async" onerror="window.__avatarFallback(this)">`}
       </div>
       <div class="chat-row-text">
         <div class="chat-row-top">
@@ -3552,7 +3745,7 @@ function renderChatList(rows){
           <div class="ctime">${fmtDayTime(r.chat.lastMessageAt)}</div>
         </div>
         <div class="chat-row-bottom">
-          <div class="cpreview">${r.isMine ? 'You: ' : (r.info.isGroup && r.chat.lastSenderName ? escapeHtml(r.chat.lastSenderName) + ': ' : '')}${escapeHtml(r.chat.lastMessage || (r.chat.lastSenderId ? 'Photo' : 'Say hi 👋'))}</div>
+          <div class="cpreview">${r.isMine ? 'You: ' : (r.info.isGroup && r.chat.lastSenderName ? escapeHtml(r.chat.lastSenderName) + ': ' : '')}${escapeHtml(r.chat.lastMessage || (r.chat.lastSenderId ? 'New message' : 'Say hi 👋'))}</div>
           ${r.unread ? `<div class="unread-badge">${r.unread}</div>` : ''}
         </div>
       </div>
@@ -3600,7 +3793,7 @@ function detectNewMessageNotifications(rows){
     const prev = lastSeenTimestamps.get(r.id) || 0;
     if(ms > prev){
       lastSeenTimestamps.set(r.id, ms);
-      const notifBody = (r.info.isGroup && r.chat.lastSenderName ? r.chat.lastSenderName + ': ' : '') + (r.chat.lastMessage || 'Sent a photo');
+      const notifBody = (r.info.isGroup && r.chat.lastSenderName ? r.chat.lastSenderName + ': ' : '') + (r.chat.lastMessage || 'sent a message');
       toast(notifBody, {
         title: r.info.name,
         avatar: r.info.avatar || defaultAvatar(r.info.name),
@@ -3631,6 +3824,15 @@ function openChat(chatId, chatData){
   activeChatId = chatId;
   lastMessageDocsCache = null;
 
+  // Reset pagination + scroll state for the newly opened conversation
+  olderMessagesStatic = [];
+  earliestDocSnapshot = null;
+  usingStaticOlderAnchor = false;
+  allOlderLoaded = false;
+  loadingOlderMessages = false;
+  messagesErrorCount = 0;
+  stickToBottom = true;
+
   const info = chatDisplayInfo(chatData);
   activeChat = {
     id: chatId,
@@ -3651,6 +3853,7 @@ function openChat(chatId, chatData){
   renderActiveChatHeader();
   $('message-input').value = '';
   $('send-btn').disabled = true;
+  $('messages').innerHTML = '';
 
   if(unsubChatDoc) unsubChatDoc();
   if(unsubMessages) unsubMessages();
@@ -3686,19 +3889,7 @@ function openChat(chatId, chatData){
     }
   }, err => console.error('Chat doc listener error:', err));
 
-  const listenerChatId = activeChatId;
-  unsubMessages = db.collection('chats').doc(activeChatId).collection('messages')
-    .orderBy('createdAt', 'asc')
-    .onSnapshot(snap => {
-      renderMessages(snap.docs.map(d => ({id:d.id, ...d.data()})));
-      lastMessageDocsCache = snap.docs;
-      if(document.visibilityState === 'visible' && activeChatId === listenerChatId){
-        markMessagesRead(snap.docs);
-      }
-    }, err => {
-      console.error('Messages listener error:', err);
-      toast('Trouble loading messages — retrying…');
-    });
+  subscribeMessages(activeChatId);
 
   const typingRef = rtdb.ref('typing/' + chatId);
   const typingHandler = typingRef.on('value', (snap) => {
@@ -3722,6 +3913,94 @@ function openChat(chatId, chatData){
 
 let rtdbReadsCache = {};
 
+/* ---- Live messages subscription (bounded window; older history is paged in on demand) ---- */
+function subscribeMessages(chatId){
+  if(unsubMessages) unsubMessages();
+  unsubMessages = db.collection('chats').doc(chatId).collection('messages')
+    .orderBy('createdAt', 'asc')
+    .limitToLast(MSG_PAGE_SIZE)
+    .onSnapshot(snap => {
+      if(activeChatId !== chatId) return;
+      messagesErrorCount = 0;
+
+      // Track whether the user is scrolled near the bottom BEFORE we mutate the DOM,
+      // so a live update never yanks the viewport if they've scrolled up to read history.
+      const wrap = $('messages');
+      const isFirstLoadForThisChat = lastMessageDocsCache === null;
+      stickToBottom = isFirstLoadForThisChat || isNearBottom(wrap);
+
+      lastMessageDocsCache = snap.docs;
+      if(!usingStaticOlderAnchor){
+        earliestDocSnapshot = snap.docs[0] || null;
+        if(snap.docs.length < MSG_PAGE_SIZE) allOlderLoaded = true;
+      }
+      renderMessages(getCombinedMessages());
+      if(document.visibilityState === 'visible' && activeChatId === chatId){
+        markMessagesRead(snap.docs);
+      }
+    }, err => {
+      console.error('Messages listener error:', err);
+      if(activeChatId !== chatId) return;
+      messagesErrorCount++;
+      if(messagesErrorCount === 1) toast('Trouble loading messages — retrying…');
+      const delay = Math.min(2000 * messagesErrorCount, 15000);
+      setTimeout(() => { if(activeChatId === chatId) subscribeMessages(chatId); }, delay);
+    });
+}
+
+function getCombinedMessages(){
+  const live = (lastMessageDocsCache || []).map(d => ({id: d.id, ...d.data()}));
+  const liveIds = new Set(live.map(m => m.id));
+  const older = olderMessagesStatic.filter(m => !liveIds.has(m.id));
+  return [...older, ...live];
+}
+
+async function loadOlderMessages(){
+  if(!activeChatId || loadingOlderMessages || allOlderLoaded || !earliestDocSnapshot) return;
+  const chatId = activeChatId;
+  loadingOlderMessages = true;
+  const btn = $('load-older-btn');
+  if(btn){ btn.disabled = true; btn.textContent = 'Loading…'; }
+  const wrap = $('messages');
+  const prevScrollHeight = wrap.scrollHeight;
+  const prevScrollTop = wrap.scrollTop;
+  // Loading history should never trigger an auto-scroll-to-bottom.
+  const wasSticky = stickToBottom;
+  stickToBottom = false;
+  try{
+    const snap = await db.collection('chats').doc(chatId).collection('messages')
+      .orderBy('createdAt', 'asc')
+      .endBefore(earliestDocSnapshot)
+      .limitToLast(MSG_PAGE_SIZE)
+      .get();
+    if(activeChatId !== chatId) return;
+    if(snap.empty){
+      allOlderLoaded = true;
+    } else {
+      const newDocs = snap.docs;
+      const newMsgs = newDocs.map(d => ({id: d.id, ...d.data()}));
+      olderMessagesStatic = [...newMsgs, ...olderMessagesStatic];
+      earliestDocSnapshot = newDocs[0];
+      usingStaticOlderAnchor = true;
+      if(newDocs.length < MSG_PAGE_SIZE) allOlderLoaded = true;
+    }
+    renderMessages(getCombinedMessages());
+    requestAnimationFrame(() => {
+      wrap.scrollTop = wrap.scrollHeight - prevScrollHeight + prevScrollTop;
+    });
+  }catch(err){
+    toast('Could not load earlier messages: ' + err.message);
+  }finally{
+    loadingOlderMessages = false;
+    stickToBottom = wasSticky;
+    const btn2 = $('load-older-btn');
+    if(btn2){
+      btn2.disabled = allOlderLoaded;
+      btn2.textContent = allOlderLoaded ? 'Beginning of conversation' : 'Load earlier messages';
+    }
+  }
+}
+
 function closeActiveChat(){
   if(unsubChatDoc) unsubChatDoc();
   if(unsubMessages) unsubMessages();
@@ -3730,6 +4009,11 @@ function closeActiveChat(){
   activeChatId = null; activeChat = null; activePartner = null;
   lastMessageDocsCache = null;
   rtdbReadsCache = {};
+  olderMessagesStatic = [];
+  earliestDocSnapshot = null;
+  usingStaticOlderAnchor = false;
+  allOlderLoaded = false;
+  loadingOlderMessages = false;
   $('active-chat-view').style.display = 'none';
   $('no-chat-state').style.display = 'flex';
   $('app').classList.remove('chat-open');
@@ -3806,27 +4090,153 @@ function applyRtdbReadTicks(){
   if(!rows.length) return;
   const lastTimeEl = rows[rows.length - 1];
   if(!lastTimeEl || !lastTimeEl.dataset.mid) return;
+
+  const lastDoc = lastMessageDocsCache.find(d => d.id === lastTimeEl.dataset.mid);
+  const lastMsg = lastDoc ? lastDoc.data() : null;
+  const msgMs = (lastMsg && lastMsg.createdAt && lastMsg.createdAt.toMillis) ? lastMsg.createdAt.toMillis() : 0;
+
   let readLabel = 'Delivered';
   if(activeChat.isGroup){
     const othersCount = activeChat.members.length - 1;
-    const readCount = Object.keys(rtdbReadsCache).filter(uid => uid !== currentUser.uid).length;
+    const readCount = Object.keys(rtdbReadsCache).filter(uid => {
+      if(uid === currentUser.uid) return false;
+      const t = rtdbReadsCache[uid];
+      const rtdbSaysRead = typeof t === 'number' && t >= msgMs;
+      const firestoreSaysRead = lastMsg && lastMsg.readBy && lastMsg.readBy.includes(uid);
+      return rtdbSaysRead || firestoreSaysRead;
+    }).length;
     readLabel = readCount >= othersCount && othersCount > 0 ? 'Read by all' : readCount > 0 ? `Read by ${readCount}` : 'Delivered';
   } else if(activePartner){
-    readLabel = rtdbReadsCache[activePartner.uid] ? 'Read' : 'Delivered';
+    const rtdbTs = rtdbReadsCache[activePartner.uid];
+    const rtdbSaysRead = typeof rtdbTs === 'number' && rtdbTs >= msgMs;
+    const firestoreSaysRead = lastMsg && lastMsg.readBy && lastMsg.readBy.includes(activePartner.uid);
+    readLabel = (rtdbSaysRead || firestoreSaysRead) ? 'Read' : 'Delivered';
   }
   const label = lastTimeEl.querySelector('.read-status-label');
   if(label) label.textContent = readLabel;
+}
+
+/*
+ * Renders each message row's trailing meta line.
+ *
+ * FIX: the previous version only rendered a timestamp for received messages,
+ * and for the SENDER's own last message it wiped out the time entirely,
+ * leaving only the "Unsend" link with no time/read-status ever appearing.
+ * Every row now always gets a time (and sent rows always get a status +
+ * unsend link when eligible), regardless of whether it's the last message
+ * in a run or the last message in the whole conversation.
+ */
+function buildTimeRow(m, isLastOfRun, isVeryLastSentMsg, readLabel){
+  const time = document.createElement('div');
+  time.className = 'msg-time';
+  time.dataset.mid = m.id;
+  const canUnsend = m.senderId === currentUser.uid && !m.pending && !m.failed && !m.uploading;
+
+  if(m.uploading){
+    time.textContent = 'Uploading…';
+    return time;
+  }
+  if(m.failed){
+    time.appendChild(document.createTextNode('Not sent · ' + fmtTime(m.createdAt) + ' '));
+    const retrySpan = document.createElement('span');
+    retrySpan.className = 'retry-link';
+    retrySpan.dataset.mid = m.id;
+    retrySpan.textContent = 'Retry';
+    time.appendChild(retrySpan);
+    return time;
+  }
+  if(m.pending){
+    time.textContent = 'Sending…';
+    return time;
+  }
+
+  // Always show the actual send time.
+  const timeSpan = document.createElement('span');
+  timeSpan.textContent = fmtTime(m.createdAt);
+  time.appendChild(timeSpan);
+
+  // For the sender's own messages, also show read/delivered status on the
+  // very last message of the whole thread.
+  if(canUnsend && isVeryLastSentMsg && readLabel){
+    time.appendChild(document.createTextNode(' · '));
+    const label = document.createElement('span');
+    label.className = 'read-status-label';
+    label.textContent = readLabel;
+    time.appendChild(label);
+  }
+
+  if(canUnsend){
+    time.appendChild(document.createTextNode(' '));
+    const unsendSpan = document.createElement('span');
+    unsendSpan.className = 'unsend-link';
+    unsendSpan.dataset.mid = m.id;
+    unsendSpan.textContent = 'Unsend';
+    time.appendChild(unsendSpan);
+  }
+
+  if(!isLastOfRun) time.classList.add('spacer');
+
+  return time;
 }
 
 function renderMessages(messages){
   const wrap = $('messages');
   const typingEl = wrap.querySelector('.typing-row');
   wrap.innerHTML = '';
-  let lastMine = null;
+
+  if(!allOlderLoaded){
+    const loadWrap = document.createElement('div');
+    loadWrap.style.cssText = 'display:flex; justify-content:center; padding:2px 0 12px;';
+    const loadBtn = document.createElement('button');
+    loadBtn.id = 'load-older-btn';
+    loadBtn.className = 'load-older-btn';
+    loadBtn.textContent = loadingOlderMessages ? 'Loading…' : 'Load earlier messages';
+    loadBtn.disabled = loadingOlderMessages;
+    loadBtn.addEventListener('click', loadOlderMessages);
+    loadWrap.appendChild(loadBtn);
+    wrap.appendChild(loadWrap);
+  }
+
   let lastSenderId = null;
   let lastClusterMs = null;
 
-  messages.forEach(m => {
+  const runEnd = new Array(messages.length).fill(false);
+  for(let i = 0; i < messages.length; i++){
+    const m = messages[i];
+    if(m.system){ continue; }
+    const next = messages[i + 1];
+    const isLastOfRun = !next || next.system || next.senderId !== m.senderId;
+    runEnd[i] = isLastOfRun;
+  }
+
+  // Find the index of the very last non-system, non-pending/failed/uploading
+  // message sent by me — that's the one that gets a read/delivered label.
+  let veryLastSentIdx = -1;
+  for(let i = messages.length - 1; i >= 0; i--){
+    const m = messages[i];
+    if(m.system) continue;
+    if(m.senderId === currentUser.uid && !m.pending && !m.failed && !m.uploading){
+      veryLastSentIdx = i;
+      break;
+    }
+    // Stop scanning once we hit any real (non-pending) message from anyone else,
+    // since the "last sent" label only applies if my message is the most recent thing.
+  }
+
+  let myLastReadLabel = 'Delivered';
+  if(veryLastSentIdx !== -1){
+    const lastMine = messages[veryLastSentIdx];
+    if(!activeChat.isGroup){
+      const read = lastMine.readBy && activePartner && lastMine.readBy.includes(activePartner.uid);
+      myLastReadLabel = read ? 'Read' : 'Delivered';
+    } else {
+      const othersCount = activeChat.members.length - 1;
+      const readCount = (lastMine.readBy || []).filter(uid => uid !== currentUser.uid).length;
+      myLastReadLabel = readCount >= othersCount && othersCount > 0 ? 'Read by all' : readCount > 0 ? `Read by ${readCount}` : 'Delivered';
+    }
+  }
+
+  messages.forEach((m, idx) => {
     const createdMs = m.createdAt && m.createdAt.toMillis ? m.createdAt.toMillis() : (m.createdAt ? new Date(m.createdAt).getTime() : null);
     if(createdMs != null){
       if(lastClusterMs === null || (createdMs - lastClusterMs) > CLUSTER_GAP_MS){
@@ -3861,7 +4271,6 @@ function renderMessages(messages){
     const bubble = document.createElement('div');
     bubble.className = 'bubble' + (m.photoURL ? ' has-photo' : '') + (m.pending ? ' pending' : '') + (m.failed ? ' failed' : '');
 
-    // ---- Uploading photo: show a progress ring over a blurred local preview ----
     if(m.uploading && m.localPreviewUrl){
       const progWrap = document.createElement('div');
       progWrap.className = 'photo-progress-wrap';
@@ -3892,78 +4301,32 @@ function renderMessages(messages){
       img.className = 'msg-photo';
       img.src = m.photoURL;
       img.alt = 'Photo';
+      img.loading = 'lazy';
+      img.decoding = 'async';
       img.addEventListener('error', () => window.__photoFallback(img));
-      img.addEventListener('click', () => window.open(m.photoURL, '_blank'));
+      // Tapping a photo opens an in-app preview (lightbox), not a new tab.
+      img.addEventListener('click', () => openLightbox(m.photoURL));
       bubble.appendChild(img);
       if(m.text){
         const cap = document.createElement('div');
         cap.style.padding = '6px 8px 2px';
-        cap.textContent = m.text;
+        cap.innerHTML = linkifyToHtml(m.text);
+        // Prevent a link tap inside the caption from also triggering the lightbox.
+        cap.addEventListener('click', (e) => { if(e.target.closest('a')) e.stopPropagation(); });
         bubble.appendChild(cap);
       }
     } else {
-      bubble.textContent = m.text;
+      bubble.innerHTML = linkifyToHtml(m.text);
     }
     row.appendChild(bubble);
 
-    const time = document.createElement('div');
-    time.className = 'msg-time';
-    time.dataset.mid = m.id;
-    const canUnsend = m.senderId === currentUser.uid && !m.pending && !m.failed && !m.uploading;
-    if(m.uploading){
-      time.textContent = 'Uploading…';
-    } else if(m.failed){
-      const retrySpan = document.createElement('span');
-      retrySpan.className = 'retry-link';
-      retrySpan.dataset.mid = m.id;
-      retrySpan.textContent = 'Retry';
-      time.appendChild(document.createTextNode('Not sent '));
-      time.appendChild(retrySpan);
-    } else if(m.pending){
-      time.textContent = 'Sending…';
-    } else if(canUnsend && m.senderId === currentUser.uid){
-      // Non-last sent messages: show the actual send time plus Unsend.
-      time.appendChild(document.createTextNode(fmtTime(m.createdAt) + ' '));
-      const unsendSpan = document.createElement('span');
-      unsendSpan.className = 'unsend-link';
-      unsendSpan.dataset.mid = m.id;
-      unsendSpan.textContent = 'Unsend';
-      time.appendChild(unsendSpan);
-    } else if(m.senderId !== currentUser.uid){
-      time.textContent = fmtTime(m.createdAt);
-    }
+    const isLastOfRun = runEnd[idx];
+    const isVeryLastSentMsg = idx === veryLastSentIdx;
+    const time = buildTimeRow(m, isLastOfRun, isVeryLastSentMsg, myLastReadLabel);
     row.appendChild(time);
     wrap.appendChild(row);
-    if(m.senderId === currentUser.uid && !m.pending && !m.failed && !m.uploading) lastMine = {m, row, time};
   });
-  if(lastMine){
-    let readLabel = 'Delivered';
-    if(!activeChat.isGroup){
-      const read = lastMine.m.readBy && activePartner && lastMine.m.readBy.includes(activePartner.uid);
-      readLabel = read ? 'Read' : 'Delivered';
-    } else {
-      const othersCount = activeChat.members.length - 1;
-      const readCount = (lastMine.m.readBy || []).filter(uid => uid !== currentUser.uid).length;
-      readLabel = readCount >= othersCount && othersCount > 0 ? 'Read by all' : readCount > 0 ? `Read by ${readCount}` : 'Delivered';
-    }
-    lastMine.time.textContent = '';
-    // Show the actual timestamp AND the read/delivered status together,
-    // instead of the status silently replacing the time.
-    const timeSpan = document.createElement('span');
-    timeSpan.textContent = fmtTime(lastMine.m.createdAt);
-    lastMine.time.appendChild(timeSpan);
-    lastMine.time.appendChild(document.createTextNode(' · '));
-    const label = document.createElement('span');
-    label.className = 'read-status-label';
-    label.textContent = readLabel;
-    lastMine.time.appendChild(label);
-    lastMine.time.appendChild(document.createTextNode(' '));
-    const unsendSpan = document.createElement('span');
-    unsendSpan.className = 'unsend-link';
-    unsendSpan.dataset.mid = lastMine.m.id;
-    unsendSpan.textContent = 'Unsend';
-    lastMine.time.appendChild(unsendSpan);
-  }
+
   wrap.querySelectorAll('.retry-link').forEach(link => {
     link.addEventListener('click', () => retryMessage(link.dataset.mid));
   });
@@ -3971,7 +4334,8 @@ function renderMessages(messages){
     link.addEventListener('click', () => unsendMessage(link.dataset.mid));
   });
   if(typingEl) wrap.appendChild(typingEl);
-  wrap.scrollTop = wrap.scrollHeight + 999;
+
+  scrollMessagesToBottom();
   applyRtdbReadTicks();
 }
 
@@ -3986,12 +4350,13 @@ function renderTypingFromRtdb(typingMap){
       isTyping = !!typingMap[activePartner.uid];
     }
   }
+  const wasNearBottom = isNearBottom(wrap);
   if(isTyping && !el){
     el = document.createElement('div');
     el.className = 'typing-row';
     el.innerHTML = `<div class="typing-bubble"><span></span><span></span><span></span></div>`;
     wrap.appendChild(el);
-    wrap.scrollTop = wrap.scrollHeight + 999;
+    if(wasNearBottom) scrollMessagesToBottom(true);
   } else if(!isTyping && el){
     el.remove();
   }
@@ -4013,6 +4378,7 @@ async function unsendMessage(mid) {
   const chatId = activeChatId;
   try {
     await db.collection('chats').doc(chatId).collection('messages').doc(mid).delete();
+    olderMessagesStatic = olderMessagesStatic.filter(m => m.id !== mid);
     await refreshChatPreview(chatId);
     pingChat(chatId, { from: currentUser.uid });
     toast('Message unsent');
@@ -4124,6 +4490,7 @@ function isGroupOwner(){
 
 async function openGroupInfo(){
   if(!activeChat || !activeChat.isGroup) return;
+  closeAllModals();
   $('ginfo-name-input').value = activeChat.name;
   $('ginfo-name-input').disabled = !isGroupOwner() && false;
   renderGroupInfoAvatar();
@@ -4169,7 +4536,7 @@ async function renderGroupInfoMembers(){
     const canRemove = amOwner && !isMe;
     return `
     <div class="member-row" data-uid="${u.uid}">
-      <img src="${u.photoURL}" alt="${escapeHtml(u.username)}" data-seed="${escapeHtml(u.username)}" onerror="window.__avatarFallback(this)">
+      <img src="${u.photoURL}" alt="${escapeHtml(u.username)}" data-seed="${escapeHtml(u.username)}" loading="lazy" decoding="async" onerror="window.__avatarFallback(this)">
       <span class="mname">${escapeHtml(u.displayName)}${isMe ? ' (you)' : ''}</span>
       ${isOwner ? '<span class="mtag">Owner</span>' : ''}
       ${canRemove ? `<button class="remove-member-btn" data-uid="${u.uid}" data-name="${escapeHtml(u.displayName)}" title="Remove from group">
@@ -4296,6 +4663,7 @@ let addMemberSelected = new Map();
 let addMemberSearchDebounce = null;
 
 $('ginfo-add-member-btn').addEventListener('click', () => {
+  closeAllModals();
   addMemberSelected.clear();
   $('add-member-search-input').value = '';
   $('add-member-picker-list').innerHTML = '<div class="result-empty">Search for people to add.</div>';
@@ -4333,7 +4701,7 @@ function renderAddMemberPicker(results){
   results.forEach(u => merged.set(u.uid, u));
   list.innerHTML = [...merged.values()].map(u => `
     <label class="group-picker-row">
-      <img src="${u.photoURL}" alt="${escapeHtml(u.username)}" data-seed="${escapeHtml(u.username)}" onerror="window.__avatarFallback(this)">
+      <img src="${u.photoURL}" alt="${escapeHtml(u.username)}" data-seed="${escapeHtml(u.username)}" loading="lazy" decoding="async" onerror="window.__avatarFallback(this)">
       <span class="gname">${escapeHtml(u.displayName)}</span>
       <input type="checkbox" data-uid="${u.uid}" ${addMemberSelected.has(u.uid) ? 'checked' : ''}>
     </label>`).join('');
@@ -4410,13 +4778,6 @@ function attachComposerHandlers(){
   });
 }
 
-/*
- * Sends a photo message with a visible in-bubble progress indicator.
- * Writes a local optimistic "uploading" message doc immediately (with a
- * blurred local object-URL preview + a progress ring), updates its
- * uploadProgress field as the XHR reports progress, then swaps it for the
- * real photoURL once the upload finishes and the message is actually sent.
- */
 async function sendPhotoMessage(file){
   if(!file || !activeChatId || !activeChat) return;
   const attachBtn = $('attach-btn');
@@ -4427,9 +4788,7 @@ async function sendPhotoMessage(file){
   const msgRef = chatRef.collection('messages').doc();
   const localPreviewUrl = URL.createObjectURL(file);
 
-  // Optimistic local render: show the bubble with a progress ring right away
-  // by rendering it directly into the DOM (not yet in Firestore), so the
-  // user sees upload feedback with zero latency.
+  stickToBottom = true;
   renderOptimisticUploadingMessage(msgRef.id, localPreviewUrl, 0);
 
   try{
@@ -4462,8 +4821,10 @@ async function sendPhotoMessage(file){
     const batch = db.batch();
     batch.set(msgRef, msgPayload);
     batch.set(chatRef, chatUpdate, {merge:true});
-    pingChat(chatId, { from: currentUser.uid });
     await batch.commit();
+    // Ping only after the write is actually committed, so peers never read
+    // a chat doc mid-write (that race was producing phantom "sent a photo" toasts).
+    pingChat(chatId, { from: currentUser.uid });
   }catch(err){
     toast('Photo failed to send: ' + err.message);
   }finally{
@@ -4473,10 +4834,6 @@ async function sendPhotoMessage(file){
   }
 }
 
-// Local-only optimistic uploading-message state, keyed by the msgRef.id
-// that will become the real Firestore doc once the upload completes. Kept
-// separate from the Firestore-backed message list so a slow upload doesn't
-// need a Firestore write per progress tick.
 let optimisticUploads = new Map();
 function renderOptimisticUploadingMessage(id, localPreviewUrl, pct){
   optimisticUploads.set(id, { id, uploading: true, localPreviewUrl, uploadProgress: pct, senderId: currentUser.uid, createdAt: null });
@@ -4494,12 +4851,11 @@ function removeOptimisticUploadingMessage(id){
 }
 function rerenderWithOptimistic(){
   if(!lastMessageDocsCache) return;
-  const base = lastMessageDocsCache.map(d => ({id:d.id, ...d.data()}));
+  const base = getCombinedMessages();
   const extra = [...optimisticUploads.values()];
   renderMessages([...base, ...extra]);
 }
 
-// Typing state now lives purely in RTDB (see openChat's typing listener).
 function setTyping(val){
   if(!activeChatId) return;
   rtdb.ref('typing/' + activeChatId + '/' + currentUser.uid).set(val).catch(()=>{});
@@ -4515,6 +4871,7 @@ async function sendMessage(){
   clearTimeout(typingTimeout);
   isCurrentlyTyping = false;
   setTyping(false);
+  stickToBottom = true;
   await sendMessageInternal({ text });
 }
 
@@ -4554,10 +4911,10 @@ async function sendMessageInternal({ text, photoURL }){
   batch.set(msgRef, msgPayload);
   batch.set(chatRef, chatUpdate, {merge:true});
 
-  pingChat(chatId, { from: currentUser.uid });
-
   try{
     await batch.commit();
+    // Ping only after the write is actually committed (see note in sendPhotoMessage).
+    pingChat(chatId, { from: currentUser.uid });
   }catch(err){
     console.error('Send failed:', err);
     toast((navigator.onLine ? 'Message failed to send: ' : 'You\'re offline — ') + err.message);
@@ -4573,6 +4930,7 @@ async function sendMessageInternal({ text, photoURL }){
 let modalAvatarFile = null;
 
 $('open-profile-btn').addEventListener('click', () => {
+  closeAllModals();
   withAvatarFallback($('modal-avatar-preview'), myDoc.username);
   $('modal-avatar-preview').src = myDoc.photoURL;
   $('modal-displayname').value = myDoc.displayName;
@@ -4643,6 +5001,12 @@ $('modal-save-btn').addEventListener('click', async () => {
 /* ================= Sign out ================= */
 $('signout-btn').addEventListener('click', () => { teardownPresence(); auth.signOut(); });
 $('modal-signout-btn').addEventListener('click', () => { $('profile-modal').classList.remove('show'); teardownPresence(); auth.signOut(); });
+
+/* ---- Scroll listener: track whether the user is near the bottom so future
+   renders know whether to auto-scroll or leave the viewport alone. ---- */
+$('messages').addEventListener('scroll', () => {
+  stickToBottom = isNearBottom($('messages'));
+});
 </script>
 </body>
 </html>
