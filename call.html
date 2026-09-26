@@ -109,6 +109,38 @@
             display: flex; align-items: center; gap: 10px;
             margin-top: 16px; color: var(--muted); font-size: 13px;
         }
+        .school-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-top: 14px;
+            padding: 12px 14px;
+            border: 1px solid var(--line);
+            background: var(--panel-2);
+            border-radius: 14px;
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.35;
+            text-transform: none;
+            letter-spacing: 0;
+            font-weight: 500;
+        }
+        .school-row .school-copy { min-width: 0; flex: 1; }
+        .school-row strong { color: var(--text); display: block; font-size: 14px; margin-bottom: 2px; }
+        .school-row input { position: absolute; opacity: 0; pointer-events: none; }
+        .switch {
+            width: 44px; height: 26px; border-radius: 999px;
+            background: #3a4050; position: relative; flex-shrink: 0;
+        }
+        .switch::after {
+            content: "";
+            position: absolute; top: 3px; left: 3px;
+            width: 20px; height: 20px; border-radius: 50%;
+            background: #fff; transition: transform .18s ease;
+        }
+        #schoolMode:checked + .switch { background: var(--accent); }
+        #schoolMode:checked + .switch::after { transform: translateX(18px); }
         .ava {
             width: 28px; height: 28px; border-radius: 50%;
             display: grid; place-items: center; font-weight: 800; color: #fff; font-size: 12px;
@@ -132,7 +164,17 @@
             grid-auto-rows: minmax(0, 1fr);
         }
         #videos.one { grid-template-columns: 1fr; }
-        #videos.count-2 { grid-template-columns: 1fr; }
+        #videos.count-2 { grid-template-columns: 1fr; grid-template-rows: 1fr; }
+        #videos.count-2:not(.focus) .tile.local {
+            position: absolute;
+            width: min(118px, 30vw);
+            height: min(168px, 26vh);
+            right: 14px;
+            bottom: var(--bar-space);
+            z-index: 5;
+            border-radius: 14px;
+            box-shadow: 0 12px 28px rgba(0,0,0,.45);
+        }
         #videos.count-3, #videos.count-4 { grid-template-columns: 1fr 1fr; }
         #videos.count-5, #videos.count-6, #videos.count-7, #videos.count-8, #videos.count-9 {
             grid-template-columns: 1fr 1fr 1fr;
@@ -201,9 +243,7 @@
         }
         .tile.fit video { object-fit: contain !important; }
         .tile.sharing video { object-fit: contain !important; }
-        .tile.local:not(.sharing) video { object-fit: cover !important; }
-        .tile.local.fit:not(.sharing) video { object-fit: contain !important; }
-        .tile.remote:not(.sharing):not(.fit) video { object-fit: cover !important; }
+        .tile:not(.sharing):not(.fit) video { object-fit: cover !important; }
         .tile.local video { transform: scaleX(-1); }
         .tile.remote.front-cam video { transform: scaleX(-1); }
         .tile.local.back-camera video,
@@ -290,6 +330,13 @@
             padding: 5px 10px; border-radius: 999px; z-index: 2;
         }
         .tile.sharing .share-pill { display: block; }
+        .tile.same-net .label::after {
+            content: "LAN";
+            font-size: 10px;
+            font-weight: 800;
+            color: var(--green);
+            margin-left: 4px;
+        }
         @media (min-width: 760px) {
             #videos.count-2 { grid-template-columns: 1fr; padding-right: 16px; }
             #videos:not(.one) .tile.local {
@@ -314,7 +361,7 @@
         }
         @media (max-width: 759px) {
             #videos { padding: 0 12px var(--bar-space); gap: 10px; }
-            #videos.count-2 .tile.local { min-height: 140px; }
+            #videos.count-2 .tile.local { min-height: 0; }
             .tile { border-radius: 16px; }
         }
         .bar {
@@ -428,6 +475,7 @@
             #lobby > div[style] { display: none; }
             #lobby .actions { grid-column: 1 / -1; margin-top: 10px; }
             #lobby .user-row { grid-column: 1 / -1; margin-top: 8px; }
+            #lobby .school-row { grid-column: 1 / -1; margin-top: 10px; }
             #videos {
                 padding: 2px 76px 4px max(6px, env(safe-area-inset-left));
                 gap: 8px;
@@ -525,6 +573,7 @@
                 <div class="ava" id="previewAva">?</div>
                 <span id="savedHint">No saved username yet</span>
             </div>
+            
         </div>
     </div>
     <div id="stage">
@@ -549,6 +598,7 @@
         <button id="flipBtn" type="button">Flip</button>
         <button id="shareBtn" type="button">Share</button>
         <button id="fxBtn" type="button">FX</button>
+        <button id="pipBtn" type="button">PiP</button>
         <button id="hangup" type="button">Leave</button>
     </div>
     <div id="fxPanel">
@@ -581,6 +631,7 @@
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
         const USER_KEY = "wisprtc.username";
+        const SCHOOL_KEY = "wisprtc.school";
         const FIT_KEY = "wisprtc.fill";
         const CLIENT_KEY = "wisprtc.clientId";
         const STALE_MS = 70000;
@@ -622,7 +673,54 @@
             if (c?.effectiveType && /2g|3g/.test(c.effectiveType) && c.type !== "wifi") return true;
             return false;
         }
-        function iceForCall(forceRelay) {
+        function sameLan(info) {
+            return !!(info && info.net && myNetHash && info.net === myNetHash);
+        }
+        function schoolOn() {
+            return false;
+        }
+        async function hashText(s) {
+            const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("wisprtc-net|" + s));
+            return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("").slice(0, 12);
+        }
+        async function detectNetHash() {
+            let ip = "";
+            try {
+                const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+                pc.createDataChannel("n");
+                await new Promise(resolve => {
+                    const t = setTimeout(resolve, 1200);
+                    pc.onicecandidate = ev => {
+                        if (!ev.candidate) {
+                            clearTimeout(t);
+                            resolve();
+                            return;
+                        }
+                        const c = ev.candidate;
+                        const typ = c.type || (c.candidate || "").split(" typ ")[1]?.split(" ")[0];
+                        if (typ === "srflx") {
+                            const m = (c.candidate || "").match(/([0-9]{1,3}(?:\.[0-9]{1,3}){3})/);
+                            if (m) ip = m[1];
+                        }
+                    };
+                    pc.createOffer().then(o => pc.setLocalDescription(o));
+                });
+                pc.close();
+            } catch (_) {}
+            myNetHash = ip ? await hashText(ip) : "";
+            return myNetHash;
+        }
+        function iceForCall(forceRelay, info) {
+            if (schoolOn() || (!forceRelay && sameLan(info) && !onCellular())) {
+                return {
+                    iceServers: [{ urls: [
+                        "stun:stun.l.google.com:19302",
+                        "stun:stun1.l.google.com:19302"
+                    ]}],
+                    iceTransportPolicy: "all",
+                    iceCandidatePoolSize: 0
+                };
+            }
             const relay = forceRelay || onCellular();
             return {
                 iceServers: iceConfig.iceServers,
@@ -643,6 +741,7 @@
         const flipBtn = document.getElementById("flipBtn");
         const shareBtn = document.getElementById("shareBtn");
         const fxBtn = document.getElementById("fxBtn");
+        const pipBtn = document.getElementById("pipBtn");
         const fxPanel = document.getElementById("fxPanel");
         const fxSrc = document.getElementById("fxSrc");
         const fxCanvas = document.getElementById("fxCanvas");
@@ -670,7 +769,7 @@
         let fxStream = null;
         let fxLastLm = null;
         let fxReady = false;
-        let fillMode = storeGet(FIT_KEY) === "1";
+        let fillMode = storeGet(FIT_KEY) !== "0";
         const peers = new Map();
         let participantsUnsub = null;
         let removedUnsub = null;
@@ -680,6 +779,7 @@
         let reconnectTimer = null;
         let previewTimer = null;
         let previewUnsub = null;
+        let myNetHash = "";
         let callGen = 0;
         const peerGen = new Map();
         let netDown = false;
@@ -816,6 +916,8 @@
         }
         nameInput.value = storeGet(USER_KEY);
         refreshUserPreview();
+        detectNetHash().catch(() => {});
+        
         applyFitMode();
         bindTileFocus(localTile);
         document.addEventListener("keydown", (e) => {
@@ -1227,8 +1329,9 @@
             if (!localStream) return;
             localStream.getAudioTracks().forEach(t => t.enabled = micOn);
             if (!sharing) {
-                cameraStream?.getVideoTracks?.().forEach(t => t.enabled = camOn);
-                if (fxStream) fxStream.getVideoTracks().forEach(t => t.enabled = true);
+                cameraStream?.getAudioTracks?.().forEach(t => t.enabled = micOn);
+                if (camOn) cameraStream?.getVideoTracks?.().forEach(t => t.enabled = true);
+                if (fxStream) fxStream.getVideoTracks().forEach(t => t.enabled = camOn);
             }
             localTile.classList.toggle("cam-off", !camOn && !sharing);
             localMicDot.classList.toggle("off", !micOn);
@@ -1249,6 +1352,7 @@
                 await set(ref(db, `rooms/${roomId}/participants/${myId}`), {
                     name: displayName, micOn, camOn, sharing,
                     front: facing !== "environment",
+                    net: myNetHash || "",
                     joinedAt: Date.now(),
                     seenAt: Date.now(),
                     gen: callGen
@@ -1432,8 +1536,11 @@
             if (sharing) return;
             camOn = !camOn;
             applyLocalMediaState();
-            if (!camOn && roomId && myId) {
-                try { remove(ref(db, `rooms/${roomId}/previews/${myId}`)); } catch (_) {}
+            if (!camOn) {
+                cameraStream?.getVideoTracks?.().forEach(t => t.stop());
+                if (roomId && myId) {
+                    try { remove(ref(db, `rooms/${roomId}/previews/${myId}`)); } catch (_) {}
+                }
             }
             if (camOn) {
                 try {
@@ -1536,6 +1643,51 @@
             applyLocalMediaState();
             applyFitMode();
         }
+        function pipVideo() {
+            const remote = videosEl.querySelector(".tile.remote video");
+            if (remote && remote.readyState >= 2) return remote;
+            return localVideo;
+        }
+        async function startPip() {
+            const v = pipVideo();
+            if (!v) return;
+            try {
+                if (document.pictureInPictureElement === v) {
+                    await document.exitPictureInPicture();
+                    return;
+                }
+                if (v.webkitSupportsPresentationMode && v.webkitSetPresentationMode) {
+                    const mode = v.webkitPresentationMode === "picture-in-picture" ? "inline" : "picture-in-picture";
+                    v.webkitSetPresentationMode(mode);
+                    return;
+                }
+                if (v.requestPictureInPicture) {
+                    await v.requestPictureInPicture();
+                    return;
+                }
+                if (window.documentPictureInPicture?.requestWindow) {
+                    const win = await documentPictureInPicture.requestWindow({ width: 260, height: 168 });
+                    const nv = document.createElement("video");
+                    nv.autoplay = true;
+                    nv.playsInline = true;
+                    nv.muted = v.muted;
+                    nv.srcObject = v.srcObject;
+                    nv.style.cssText = "width:100%;height:100%;object-fit:cover;background:#111;margin:0";
+                    win.document.body.style.margin = "0";
+                    win.document.body.style.background = "#111";
+                    win.document.body.appendChild(nv);
+                    nv.play().catch(() => {});
+                }
+            } catch (e) { log("PiP blocked"); }
+        }
+        pipBtn.onclick = () => startPip();
+        document.addEventListener("enterpictureinpicture", () => pipBtn.classList.add("on"));
+        document.addEventListener("leavepictureinpicture", () => pipBtn.classList.remove("on"));
+        document.addEventListener("visibilitychange", () => {
+            if (document.visibilityState !== "hidden") return;
+            if (!document.body.classList.contains("in-call")) return;
+            startPip();
+        });
         document.getElementById("hangup").onclick = () => leaveRoom(true);
         async function enter() {
             displayName = cleanUsername(nameInput.value);
@@ -1557,6 +1709,7 @@
                 alert("Camera or mic blocked. On iPhone use HTTPS and allow Camera and Mic.");
                 return;
             }
+            try { await detectNetHash(); } catch (_) {}
             await joinRoom(id);
         }
         function setInCall(on) {
@@ -1682,6 +1835,9 @@
             tile.classList.toggle("sharing", !!info.sharing);
             tile.classList.toggle("front-cam", info.front !== false && !info.sharing);
             tile.classList.toggle("back-cam", info.front === false);
+            const sameNet = !!(info.net && myNetHash && info.net === myNetHash);
+            tile.classList.toggle("same-net", sameNet);
+            tile.classList.toggle("school-peer", !!info.school);
             if (info.camOn === false) {
                 tile.classList.remove("waiting");
                 const snap = tile.querySelector(".tile-snap");
@@ -1735,7 +1891,7 @@
                 peers.delete(remoteId);
             }
             if (!localStream && !cameraStream) return;
-            const cfg = iceForCall(relayOnly);
+            const cfg = iceForCall(relayOnly, info);
             const pc = new RTCPeerConnection(cfg);
             const unsubscribers = [];
             const remoteStream = new MediaStream();
@@ -1841,7 +1997,7 @@
                     }, 3000);
                 }
             };
-            if (!relayOnly) {
+            if (!relayOnly && !sameLan(info)) {
                 const wait = onCellular() ? 3500 : 10000;
                 setTimeout(async () => {
                     const entry = peers.get(remoteId);
@@ -1892,10 +2048,7 @@
             else layout();
         }
         function onPageHide() {
-            if (roomId && myId) {
-                remove(ref(db, `rooms/${roomId}/participants/${myId}`));
-                remove(ref(db, `rooms/${roomId}/previews/${myId}`));
-            }
+            if (roomId && myId) publishState();
         }
         async function leaveRoom(showLobby) {
             window.removeEventListener("pagehide", onPageHide);
