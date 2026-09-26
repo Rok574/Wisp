@@ -201,7 +201,8 @@
         }
         .tile.fit video { object-fit: contain; }
         .tile.sharing video { object-fit: contain; }
-        .tile.local:not(.sharing) video { object-fit: cover !important; }
+        .tile.local:not(.sharing) video { object-fit: contain !important; }
+        .tile.local.fill:not(.sharing) video { object-fit: cover !important; }
         .tile.local video { transform: scaleX(-1); }
         .tile.local.back-camera video,
         .tile.local.sharing video { transform: none; }
@@ -212,6 +213,40 @@
             background: #141722; color: var(--muted); font-size: 13px; font-weight: 700;
         }
         .tile.cam-off .cam-off-badge { display: flex; }
+        .tile-wait {
+            display: none;
+            position: absolute;
+            inset: 0;
+            z-index: 4;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 10px;
+            background: rgba(10,12,18,.55);
+            color: #fff;
+            font-size: 13px;
+            font-weight: 750;
+        }
+        .tile.waiting .tile-wait { display: flex; }
+        .tile-snap {
+            display: none;
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: 1;
+            filter: saturate(.85);
+        }
+        .tile.waiting .tile-snap[src],
+        .tile.snap-on .tile-snap[src] { display: block; }
+        .spin {
+            width: 28px; height: 28px; border-radius: 50%;
+            border: 3px solid rgba(255,255,255,.2);
+            border-top-color: #fff;
+            animation: spin .7s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
         .cam-off-badge .ava { width: 72px; height: 72px; font-size: 26px; }
         .label {
             position: absolute; left: 12px; bottom: 12px;
@@ -604,7 +639,7 @@
         let fxStream = null;
         let fxLastLm = null;
         let fxReady = false;
-        let fillMode = storeGet(FIT_KEY) !== "0";
+        let fillMode = storeGet(FIT_KEY) === "1";
         const peers = new Map();
         let participantsUnsub = null;
         let removedUnsub = null;
@@ -612,6 +647,9 @@
         let heartbeatTimer = null;
         let pruneTimer = null;
         let reconnectTimer = null;
+        let previewTimer = null;
+        let previewUnsub = null;
+        const previewCanvas = document.createElement("canvas");
         function storeGet(key) {
             try { return localStorage.getItem(key) || ""; } catch (_) { return ""; }
         }
@@ -808,8 +846,10 @@
                 }
             }
         }
+        const FX_W = 1280;
+        const FX_H = 720;
         function fxActive() {
-            return fxMode !== "off" && !sharing && camOn;
+            return !sharing && !!cameraStream;
         }
         function lmPt(lm, i, w, h) {
             return { x: lm[i].x * w, y: lm[i].y * h };
@@ -1050,6 +1090,7 @@
             fxCtx.filter = "none";
             fxCtx.fillStyle = "#0a0c11";
             fxCtx.fillRect(0, 0, cw, ch);
+            if (camOn) {
             try { drawCover(fxCtx, fxSrc, cw, ch); } catch (_) {}
             let used = null;
             if (fxLandmarker && fxSrc.readyState >= 2) {
@@ -1063,6 +1104,7 @@
                 } catch (_) {}
             }
             paintFx(used || fxLastLm || fakeLandmarks(cw, ch), cw, ch);
+            }
             fxRaf = requestAnimationFrame(fxTick);
         }
         async function startFxPipeline() {
@@ -1077,13 +1119,11 @@
                 fxStream = null;
             }
             if (!fxStream) {
-                const w = fxSrc.videoWidth || settings.width || 960;
-                const h = fxSrc.videoHeight || settings.height || 1280;
-                fxCanvas.width = w;
-                fxCanvas.height = h;
-                fxCanvas.style.width = w + "px";
-                fxCanvas.style.height = h + "px";
-                drawCover(fxCtx, fxSrc, w, h);
+                fxCanvas.width = FX_W;
+                fxCanvas.height = FX_H;
+                fxCanvas.style.width = FX_W + "px";
+                fxCanvas.style.height = FX_H + "px";
+                drawCover(fxCtx, fxSrc, FX_W, FX_H);
                 fxStream = fxCanvas.captureStream(30);
             }
             const out = fxStream.getVideoTracks()[0];
@@ -1092,8 +1132,9 @@
             fxTick();
         }
         function outgoingVideoTrack() {
-            if (fxActive() && fxStream?.getVideoTracks?.()[0]) return fxStream.getVideoTracks()[0];
-            return (sharing ? screenStream : cameraStream)?.getVideoTracks?.()[0] || localStream?.getVideoTracks?.()[0];
+            if (sharing) return screenStream?.getVideoTracks?.()[0];
+            if (fxStream?.getVideoTracks?.()[0]?.readyState === "live") return fxStream.getVideoTracks()[0];
+            return cameraStream?.getVideoTracks?.()[0] || localStream?.getVideoTracks?.()[0];
         }
         async function pushLocalOutput() {
             if (sharing) return;
@@ -1149,7 +1190,10 @@
         function applyLocalMediaState() {
             if (!localStream) return;
             localStream.getAudioTracks().forEach(t => t.enabled = micOn);
-            if (!sharing) localStream.getVideoTracks().forEach(t => t.enabled = camOn);
+            if (!sharing) {
+                cameraStream?.getVideoTracks?.().forEach(t => t.enabled = camOn);
+                if (fxStream) fxStream.getVideoTracks().forEach(t => t.enabled = true);
+            }
             localTile.classList.toggle("cam-off", !camOn && !sharing);
             localMicDot.classList.toggle("off", !micOn);
             muteBtn.classList.toggle("on", !micOn);
@@ -1185,7 +1229,35 @@
             clearInterval(heartbeatTimer);
             clearInterval(pruneTimer);
             clearInterval(reconnectTimer);
-            heartbeatTimer = pruneTimer = reconnectTimer = null;
+            clearInterval(previewTimer);
+            heartbeatTimer = pruneTimer = reconnectTimer = previewTimer = null;
+        }
+        function applyPreview(id, data) {
+            if (!id || id === myId) return;
+            const tile = document.getElementById("tile-" + id);
+            if (!tile || !data?.img) return;
+            let img = tile.querySelector(".tile-snap");
+            if (!img) {
+                img = document.createElement("img");
+                img.className = "tile-snap";
+                img.alt = "";
+                tile.insertBefore(img, tile.firstChild.nextSibling);
+            }
+            img.src = data.img;
+            tile.classList.add("snap-on");
+        }
+        async function publishPreviewFrame() {
+            if (!roomId || !myId || sharing || !camOn) return;
+            try {
+                previewCanvas.width = 160;
+                previewCanvas.height = 90;
+                const ctx = previewCanvas.getContext("2d");
+                const src = (fxCanvas.width > 1 && camOn) ? fxCanvas : (fxSrc.videoWidth ? fxSrc : localVideo);
+                ctx.drawImage(src, 0, 0, 160, 90);
+                const img = previewCanvas.toDataURL("image/jpeg", 0.4);
+                if (img.length > 90000) return;
+                await set(ref(db, `rooms/${roomId}/previews/${myId}`), { img, t: Date.now() });
+            } catch (_) {}
         }
         async function pruneStaleParticipants() {
             if (!roomId) return;
@@ -1208,17 +1280,40 @@
                 });
             } catch (_) {}
         }
+        function setPeerWait(id, on, text) {
+            const tile = document.getElementById("tile-" + id);
+            if (!tile) return;
+            tile.classList.toggle("waiting", !!on);
+            const label = tile.querySelector("[data-wait]");
+            if (label && text) label.textContent = text;
+        }
         async function recoverPeers() {
             if (!roomId || !localStream) return;
             for (const [id, entry] of peers.entries()) {
                 const st = entry.pc?.connectionState;
-                if (st === "failed" || st === "disconnected" || st === "closed") {
+                if (st === "disconnected" || st === "failed") {
+                    setPeerWait(id, true, "Reconnecting");
                     try { entry.pc.restartIce(); } catch (_) {}
-                    if (st === "failed" || st === "closed") {
-                        const info = {};
-                        teardownPeer(id);
-                        await ensurePeer(id, myId < id, false, info);
-                    }
+                } else if (st === "closed") {
+                    peers.delete(id);
+                    await ensurePeer(id, myId < id, false, {});
+                } else {
+                    try {
+                        const stats = await entry.pc.getStats();
+                        let bytes = 0;
+                        stats.forEach(r => {
+                            if (r.type === "inbound-rtp" && (r.kind === "video" || r.mediaType === "video")) {
+                                bytes += r.bytesReceived || 0;
+                            }
+                        });
+                        const now = Date.now();
+                        if (entry.lastStats && now - entry.lastStats > 2500) {
+                            if (bytes === entry.lastBytes) setPeerWait(id, true, "Unstable connection");
+                            else setPeerWait(id, false);
+                        }
+                        entry.lastBytes = bytes;
+                        entry.lastStats = now;
+                    } catch (_) {}
                 }
             }
         }
@@ -1226,14 +1321,12 @@
             if (localStream && !sharing) return localStream;
             cameraStream = await getMedia();
             localStream = cameraStream;
-            if (fxMode !== "off") {
-                try {
-                    await loadFaceModel();
-                    await startFxPipeline();
-                    await pushLocalOutput();
-                    return localStream;
-                } catch (_) {}
-            }
+            try {
+                if (fxMode !== "off") await loadFaceModel();
+                await startFxPipeline();
+                await pushLocalOutput();
+                return localStream;
+            } catch (_) {}
             await attachLocal(localStream);
             syncCameraMirror();
             applyLocalMediaState();
@@ -1264,10 +1357,23 @@
             setTimeout(() => document.getElementById("copyBtn").textContent = "Copy", 1200);
         };
         muteBtn.onclick = () => { micOn = !micOn; applyLocalMediaState(); };
-        camBtn.onclick = () => {
+        camBtn.onclick = async () => {
             if (sharing) return;
             camOn = !camOn;
             applyLocalMediaState();
+            if (camOn) {
+                try {
+                    if (!cameraStream || cameraStream.getVideoTracks().every(t => t.readyState !== "live")) {
+                        cameraStream = await getMedia(facing);
+                    } else {
+                        cameraStream.getVideoTracks().forEach(t => t.enabled = true);
+                    }
+                    fxSrc.srcObject = cameraStream;
+                    await fxSrc.play();
+                    await startFxPipeline();
+                    await pushLocalOutput();
+                } catch (_) {}
+            }
         };
         fitBtn.onclick = () => {
             fillMode = !fillMode;
@@ -1286,18 +1392,9 @@
                 const settings = next.getVideoTracks()[0]?.getSettings?.() || {};
                 facing = settings.facingMode || nextFacing;
                 if (old && old !== next) old.getTracks().forEach(t => t.stop());
-                if (fxMode !== "off") {
-                    await startFxPipeline();
-                    await pushLocalOutput();
-                } else {
-                    await attachLocal(localStream);
-                    syncCameraMirror();
-                    applyLocalMediaState();
-                    const vt = localStream.getVideoTracks()[0];
-                    const at = localStream.getAudioTracks()[0];
-                    await replaceOutgoingVideo(vt);
-                    await replaceOutgoingAudio(at);
-                }
+                fxLastLm = null;
+                await startFxPipeline();
+                await pushLocalOutput();
             } catch (e) { log("Flip failed"); }
             flipBtn.disabled = sharing;
         };
@@ -1414,6 +1511,7 @@
             log("In room " + roomId);
             const meRef = ref(db, `rooms/${roomId}/participants/${myId}`);
             try { await onDisconnect(meRef).remove(); } catch (_) {}
+            try { await onDisconnect(ref(db, `rooms/${roomId}/previews/${myId}`)).remove(); } catch (_) {}
             await publishState();
             window.addEventListener("pagehide", onPageHide);
             window.addEventListener("beforeunload", onPageHide);
@@ -1452,6 +1550,13 @@
             heartbeatTimer = setInterval(() => { publishState(); }, 8000);
             pruneTimer = setInterval(() => { pruneStaleParticipants(); }, 10000);
             reconnectTimer = setInterval(() => { recoverPeers(); }, 5000);
+            previewTimer = setInterval(() => { publishPreviewFrame(); }, 2000);
+            publishPreviewFrame();
+            if (previewUnsub) { try { previewUnsub(); } catch (_) {} }
+            previewUnsub = onValue(ref(db, `rooms/${roomId}/previews`), snap => {
+                if (!snap.exists()) return;
+                snap.forEach(child => applyPreview(child.key, child.val() || {}));
+            });
         }
         function onVisible() {
             if (document.visibilityState === "visible") {
@@ -1512,11 +1617,13 @@
             const existing = peers.get(remoteId);
             if (existing) {
                 const st = existing.pc.connectionState;
-                if (st !== "failed" && st !== "closed" && st !== "disconnected") {
+                if (st !== "failed" && st !== "closed") {
                     attachLocalTracks(existing.pc);
                     return;
                 }
-                teardownPeer(remoteId);
+                try { existing.pc.close(); } catch (_) {}
+                existing.unsubscribers.forEach(fn => { try { fn(); } catch (_) {} });
+                peers.delete(remoteId);
             }
             if (!localStream && !cameraStream) return;
             const crowded = peers.size >= 4;
@@ -1527,19 +1634,25 @@
             const pc = new RTCPeerConnection(cfg);
             const unsubscribers = [];
             const remoteStream = new MediaStream();
-            peers.set(remoteId, { pc, unsubscribers, remoteStream, muted: false, relayOnly });
+            peers.set(remoteId, { pc, unsubscribers, remoteStream, muted: false, relayOnly, lastBytes: 0, lastStats: 0 });
             attachLocalTracks(pc);
-            const tile = document.createElement("div");
+            let tile = document.getElementById("tile-" + remoteId);
+            let v = tile?.querySelector("video");
+            if (!tile) {
+            tile = document.createElement("div");
             tile.className = "tile remote";
             tile.id = "tile-" + remoteId;
-            const v = document.createElement("video");
+            v = document.createElement("video");
             v.autoplay = true;
             v.playsInline = true;
             v.setAttribute("playsinline", "");
             v.setAttribute("webkit-playsinline", "");
             v.srcObject = remoteStream;
             v.addEventListener("loadedmetadata", () => playVideo(v));
-            v.addEventListener("canplay", () => playVideo(v));
+            v.addEventListener("canplay", () => { playVideo(v); setPeerWait(remoteId, false); });
+            v.addEventListener("playing", () => setPeerWait(remoteId, false));
+            v.addEventListener("waiting", () => setPeerWait(remoteId, true, "Loading"));
+            v.addEventListener("stalled", () => setPeerWait(remoteId, true, "Reconnecting"));
             const badge = document.createElement("div");
             badge.className = "cam-off-badge";
             const av = document.createElement("div");
@@ -1549,6 +1662,12 @@
             const sharePill = document.createElement("div");
             sharePill.className = "share-pill";
             sharePill.textContent = "Sharing screen";
+            const snapImg = document.createElement("img");
+            snapImg.className = "tile-snap";
+            snapImg.alt = "";
+            const waitEl = document.createElement("div");
+            waitEl.className = "tile-wait";
+            waitEl.innerHTML = '<div class="spin"></div><span data-wait>Connecting</span>';
             const label = document.createElement("div");
             label.className = "label";
             const dot = document.createElement("span");
@@ -1572,10 +1691,13 @@
                 muteThem.textContent = p.muted ? "Hear" : "Mute";
             };
             btns.appendChild(muteThem);
-            tile.append(v, sharePill, badge, label, btns);
+            tile.append(v, snapImg, waitEl, sharePill, badge, label, btns);
             bindTileFocus(tile);
             videosEl.appendChild(tile);
             layout();
+            }
+            v.srcObject = remoteStream;
+            setPeerWait(remoteId, true, "Connecting");
             playVideo(v);
             updateRemoteChrome(remoteId, info);
             pc.ontrack = (ev) => {
@@ -1600,18 +1722,25 @@
                 if (p?.muted) remoteStream.getAudioTracks().forEach(t => t.enabled = false);
                 v.srcObject = remoteStream;
                 v.muted = false;
+                setPeerWait(remoteId, false);
                 playVideo(v);
             };
             pc.onconnectionstatechange = () => {
                 log((info.name || remoteId.slice(0, 6)) + ": " + pc.connectionState);
+                if (pc.connectionState === "connected") setPeerWait(remoteId, false);
+                if (pc.connectionState === "connecting" || pc.connectionState === "disconnected") {
+                    setPeerWait(remoteId, true, "Reconnecting");
+                }
                 if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
                     try { pc.restartIce(); } catch (_) {}
                     setTimeout(() => {
                         const entry = peers.get(remoteId);
                         if (!entry || entry.pc !== pc) return;
-                        if (pc.connectionState === "connected") return;
-                        teardownPeer(remoteId);
-                        ensurePeer(remoteId, iAmOfferer, true, info);
+                        if (pc.connectionState === "connected") {
+                            setPeerWait(remoteId, false);
+                            return;
+                        }
+                        try { pc.restartIce(); } catch (_) {}
                     }, 2500);
                 }
             };
@@ -1668,6 +1797,7 @@
         function onPageHide() {
             if (roomId && myId) {
                 remove(ref(db, `rooms/${roomId}/participants/${myId}`));
+                remove(ref(db, `rooms/${roomId}/previews/${myId}`));
             }
         }
         async function leaveRoom(showLobby) {
@@ -1679,12 +1809,14 @@
             if (participantsUnsub) { try { participantsUnsub(); } catch (_) {} participantsUnsub = null; }
             if (removedUnsub) { try { removedUnsub(); } catch (_) {} removedUnsub = null; }
             if (partsValueUnsub) { try { partsValueUnsub(); } catch (_) {} partsValueUnsub = null; }
+            if (previewUnsub) { try { previewUnsub(); } catch (_) {} previewUnsub = null; }
             [...peers.keys()].forEach(teardownPeer);
             const leavingRoomId = roomId;
             const leavingUserId = myId;
             if (leavingRoomId && leavingUserId) {
                 try {
                     await remove(ref(db, `rooms/${leavingRoomId}/participants/${leavingUserId}`));
+                    await remove(ref(db, `rooms/${leavingRoomId}/previews/${leavingUserId}`));
                     await deleteRoomIfEmpty(leavingRoomId);
                 } catch (_) {}
             }
