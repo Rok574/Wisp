@@ -202,10 +202,14 @@
         .tile.fit video { object-fit: contain !important; }
         .tile.sharing video { object-fit: contain !important; }
         .tile.local:not(.sharing) video { object-fit: cover !important; }
+        .tile.local.fit:not(.sharing) video { object-fit: contain !important; }
         .tile.remote:not(.sharing):not(.fit) video { object-fit: cover !important; }
         .tile.local video { transform: scaleX(-1); }
+        .tile.remote.front-cam video { transform: scaleX(-1); }
         .tile.local.back-camera video,
-        .tile.local.sharing video { transform: none; }
+        .tile.local.sharing video,
+        .tile.remote.sharing video,
+        .tile.remote.back-cam video { transform: none; }
         .tile.cam-off video { opacity: 0; }
         .cam-off-badge {
             display: none; position: absolute; inset: 0;
@@ -594,14 +598,15 @@
                         "turn:openrelay.metered.ca:80",
                         "turn:openrelay.metered.ca:80?transport=tcp",
                         "turn:openrelay.metered.ca:443?transport=tcp",
-                        "turns:openrelay.metered.ca:443"
+                        "turns:openrelay.metered.ca:443",
+                        "turn:openrelay.metered.ca:443?transport=tcp"
                     ],
                     username: "openrelayproject",
                     credential: "openrelayproject"
                 },
                 ...EXTRA_TURN
             ],
-            iceCandidatePoolSize: 8
+            iceCandidatePoolSize: 2
         };
         const iceRelayOnly = {
             iceServers: iceConfig.iceServers.filter(s => {
@@ -609,8 +614,22 @@
                 return list.some(x => String(x).startsWith("turn"));
             }),
             iceTransportPolicy: "relay",
-            iceCandidatePoolSize: 8
+            iceCandidatePoolSize: 2
         };
+        function onCellular() {
+            const c = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+            if (c?.type === "cellular") return true;
+            if (c?.effectiveType && /2g|3g/.test(c.effectiveType) && c.type !== "wifi") return true;
+            return false;
+        }
+        function iceForCall(forceRelay) {
+            const relay = forceRelay || onCellular();
+            return {
+                iceServers: iceConfig.iceServers,
+                iceTransportPolicy: relay ? "relay" : "all",
+                iceCandidatePoolSize: 2
+            };
+        }
         const videosEl = document.getElementById("videos");
         const localVideo = document.getElementById("localVideo");
         const localTile = document.getElementById("localTile");
@@ -661,6 +680,9 @@
         let reconnectTimer = null;
         let previewTimer = null;
         let previewUnsub = null;
+        let callGen = 0;
+        const peerGen = new Map();
+        let netDown = false;
         const previewCanvas = document.createElement("canvas");
         function storeGet(key) {
             try { return localStorage.getItem(key) || ""; } catch (_) { return ""; }
@@ -700,6 +722,8 @@
                 t.classList.toggle("fit", useFit);
                 t.classList.toggle("fill", !useFit);
             });
+            localTile.classList.toggle("fit", !fillMode);
+            localTile.classList.toggle("fill", fillMode);
             fitBtn.textContent = fillMode ? "Fill" : "Fit";
         }
         function syncCameraMirror() {
@@ -1224,8 +1248,10 @@
             try {
                 await set(ref(db, `rooms/${roomId}/participants/${myId}`), {
                     name: displayName, micOn, camOn, sharing,
+                    front: facing !== "environment",
                     joinedAt: Date.now(),
-                    seenAt: Date.now()
+                    seenAt: Date.now(),
+                    gen: callGen
                 });
             } catch (_) {}
         }
@@ -1591,7 +1617,14 @@
                         return;
                     }
                     updateRemoteChrome(child.key, info);
-                    ensurePeer(child.key, myId < child.key, false, info);
+                    const g = info.gen || 0;
+                    if (peerGen.has(child.key) && peerGen.get(child.key) !== g) {
+                        peerGen.set(child.key, g);
+                        rebuildPeer(child.key, info, false);
+                    } else {
+                        peerGen.set(child.key, g);
+                        ensurePeer(child.key, myId < child.key, false, info);
+                    }
                 });
             });
             stopPresenceTimers();
@@ -1610,6 +1643,29 @@
                 recoverPeers();
             }
         }
+        async function reconnectAfterNetwork() {
+            if (!roomId || !myId) return;
+            callGen += 1;
+            log("Network changed — rebuilding");
+            await publishState();
+            const ids = [...peers.keys()];
+            for (const id of ids) {
+                try { await rebuildPeer(id, {}, false); } catch (_) {}
+            }
+        }
+        window.addEventListener("offline", () => { netDown = true; });
+        window.addEventListener("online", () => {
+            if (!roomId) return;
+            netDown = false;
+            reconnectAfterNetwork();
+        });
+        if (navigator.connection) {
+            navigator.connection.addEventListener("change", () => {
+                if (!roomId) return;
+                clearTimeout(window.__netT);
+                window.__netT = setTimeout(reconnectAfterNetwork, 400);
+            });
+        }
         function signalPath(a, b, leaf, relayOnly = false) {
             const [x, y] = a < b ? [a, b] : [b, a];
             return `rooms/${roomId}/signals/${x}_${y}/${relayOnly ? "relay" : "p2p"}/${leaf}`;
@@ -1624,6 +1680,8 @@
             if (dot) dot.classList.toggle("off", info.micOn === false);
             tile.classList.toggle("cam-off", info.camOn === false && !info.sharing);
             tile.classList.toggle("sharing", !!info.sharing);
+            tile.classList.toggle("front-cam", info.front !== false && !info.sharing);
+            tile.classList.toggle("back-cam", info.front === false);
             if (info.camOn === false) {
                 tile.classList.remove("waiting");
                 const snap = tile.querySelector(".tile-snap");
@@ -1657,7 +1715,7 @@
                     const n = Math.max(1, peers.size);
                     const params = s.getParameters();
                     params.encodings = params.encodings?.length ? params.encodings : [{}];
-                    params.encodings[0].maxBitrate = n >= 8 ? 250000 : 900000;
+                    params.encodings[0].maxBitrate = onCellular() ? 180000 : (n >= 8 ? 250000 : 700000);
                     params.encodings[0].scaleResolutionDownBy = 1;
                     await s.setParameters(params);
                 } catch (_) {}
@@ -1677,11 +1735,7 @@
                 peers.delete(remoteId);
             }
             if (!localStream && !cameraStream) return;
-            const crowded = peers.size >= 4;
-            const cfg = relayOnly ? iceRelayOnly : {
-                ...iceConfig,
-                iceCandidatePoolSize: crowded ? 0 : 4
-            };
+            const cfg = iceForCall(relayOnly);
             const pc = new RTCPeerConnection(cfg);
             const unsubscribers = [];
             const remoteStream = new MediaStream();
@@ -1691,7 +1745,7 @@
             let v = tile?.querySelector("video");
             if (!tile) {
             tile = document.createElement("div");
-            tile.className = "tile remote";
+            tile.className = "tile remote front-cam";
             tile.id = "tile-" + remoteId;
             v = document.createElement("video");
             v.autoplay = true;
@@ -1788,7 +1842,7 @@
                 }
             };
             if (!relayOnly) {
-                const wait = 12000 + Math.floor(Math.random() * 4000);
+                const wait = onCellular() ? 3500 : 10000;
                 setTimeout(async () => {
                     const entry = peers.get(remoteId);
                     if (!entry || entry.pc !== pc) return;
