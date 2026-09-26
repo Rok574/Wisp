@@ -270,6 +270,91 @@
         @media (min-width: 760px) {
             .bar button { width: 52px; height: 52px; }
         }
+        @media (orientation: landscape) and (max-height: 520px) {
+            :root { --bar-space: 8px; }
+            body { min-height: 100dvh; }
+            body.in-call .topbar {
+                height: 32px;
+                padding: 0 max(10px, env(safe-area-inset-right)) 0 max(10px, env(safe-area-inset-left));
+            }
+            body.in-call .logo { width: 22px; height: 22px; border-radius: 7px; }
+            body.in-call .logo svg { width: 12px; height: 12px; }
+            body.in-call .brand { font-size: 13px; gap: 8px; }
+            body.in-call .live { padding: 3px 6px 3px 8px; font-size: 11px; }
+            body.in-call .copy { padding: 4px 8px; font-size: 11px; }
+            #lobbyWrap {
+                align-items: stretch;
+                padding: 6px max(12px, env(safe-area-inset-right)) 10px max(12px, env(safe-area-inset-left));
+            }
+            #lobby {
+                width: min(720px, 100%);
+                padding: 14px 16px 12px;
+                border-radius: 16px;
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                grid-template-rows: auto auto auto auto;
+                column-gap: 16px;
+                align-content: start;
+            }
+            #lobby h2 { font-size: 20px; grid-column: 1; margin: 0 0 4px; }
+            #lobby p { display: none; }
+            #lobby label[for="nameInput"], #nameInput { grid-column: 1; }
+            #lobby label[for="roomInput"], #roomInput { grid-column: 2; }
+            #lobby label { margin: 6px 0 6px; }
+            #lobby input { padding: 10px 12px; }
+            #lobby > div[style] { display: none; }
+            #lobby .actions { grid-column: 1 / -1; margin-top: 10px; }
+            #lobby .user-row { grid-column: 1 / -1; margin-top: 8px; }
+            #videos {
+                padding: 2px 76px 4px max(6px, env(safe-area-inset-left));
+                gap: 8px;
+            }
+            #videos.count-2 { grid-template-columns: 1fr; }
+            #videos.count-2 .tile.local { min-height: 0; }
+            #videos.count-3, #videos.count-4 { grid-template-columns: 1fr 1fr; }
+            #videos:not(.one):not(.focus) .tile.local {
+                position: absolute;
+                width: min(132px, 28vw);
+                height: 78px;
+                right: calc(76px + env(safe-area-inset-right, 0px));
+                bottom: 8px;
+                z-index: 5;
+                border-radius: 12px;
+                box-shadow: 0 10px 24px rgba(0,0,0,.4);
+            }
+            #videos.focus { padding-right: 76px; }
+            #videos.focus > .tile.local:not(.focused) {
+                width: 110px !important;
+                height: 68px !important;
+                right: calc(76px + env(safe-area-inset-right, 0px)) !important;
+                bottom: 8px !important;
+            }
+            .tile { border-radius: 12px; }
+            .label { left: 8px; bottom: 8px; font-size: 12px; padding: 4px 8px; }
+            .tile-btns { right: 8px; bottom: 8px; }
+            .tile-btns button { height: 26px; font-size: 11px; }
+            .cam-off-badge .ava { width: 48px; height: 48px; font-size: 18px; }
+            .bar {
+                left: auto;
+                right: max(6px, env(safe-area-inset-right));
+                top: 50%;
+                bottom: auto;
+                transform: translateY(-50%);
+                flex-direction: column;
+                gap: 6px;
+                padding: 8px;
+                max-width: none;
+                max-height: calc(100dvh - 16px);
+                overflow-y: auto;
+                overflow-x: hidden;
+            }
+            .bar button {
+                width: 40px;
+                height: 40px;
+                font-size: 9px;
+            }
+            .bar #hangup { width: 40px; height: 42px; }
+        }
     </style>
 </head>
 <body>
