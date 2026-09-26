@@ -147,6 +147,7 @@
         }
         video { width: 100%; height: 100%; object-fit: cover; background: #0a0c11; display: block; }
         .tile.local video { transform: scaleX(-1); }
+        .tile.local.back-camera video { transform: none; }
         .tile.cam-off video { opacity: 0; }
         .cam-off-badge {
             display: none; position: absolute; inset: 0;
@@ -392,11 +393,19 @@
 
         function cleanRoomCode(raw) {
             return String(raw || "")
-                .replace(/[^a-zA-Z0-9_-]/g, "")
                 .trim()
+                .replace(/[.#$\[\]\/]/g, "")
+                .replace(/\s+/g, "-")
+                .replace(/[^a-zA-Z0-9_-]/g, "")
                 .slice(0, 32)
                 .toUpperCase();
         }
+        function syncCameraMirror() {
+            const track = localStream?.getVideoTracks?.()[0];
+            const mode = track?.getSettings?.().facingMode || facing;
+            localTile.classList.toggle("back-camera", mode === "environment");
+        }
+
         async function playVideo(el) { try { await el.play(); } catch (_) {} }
         function layout() {
             const n = videosEl.children.length;
@@ -467,6 +476,7 @@
             localStream = await getMedia();
             localVideo.srcObject = localStream;
             localVideo.muted = true;
+            syncCameraMirror();
             await playVideo(localVideo);
             applyLocalMediaState();
             return localStream;
@@ -502,12 +512,14 @@
         muteBtn.onclick = () => { micOn = !micOn; applyLocalMediaState(); };
         camBtn.onclick = () => { camOn = !camOn; applyLocalMediaState(); };
         flipBtn.onclick = async () => {
-            facing = facing === "user" ? "environment" : "user";
+            const nextFacing = facing === "user" ? "environment" : "user";
             try {
-                const next = await getMedia(facing);
+                const next = await getMedia(nextFacing);
                 const old = localStream;
                 localStream = next;
+                facing = next.getVideoTracks()[0]?.getSettings?.().facingMode || nextFacing;
                 localVideo.srcObject = localStream;
+                syncCameraMirror();
                 applyLocalMediaState();
                 for (const { pc } of peers.values()) {
                     const sender = pc.getSenders().find(s => s.track && s.track.kind === "video");
@@ -562,6 +574,8 @@
         }
 
         async function joinRoom(id) {
+            id = cleanRoomCode(id);
+            if (!id) throw new Error("Invalid room code");
             await leaveRoom(false);
             roomId = id;
             myId = uid() + Date.now().toString(36).slice(-3);
@@ -629,6 +643,8 @@
             v.setAttribute("playsinline", "");
             v.setAttribute("webkit-playsinline", "");
             v.srcObject = remoteStream;
+            v.addEventListener("loadedmetadata", () => playVideo(v));
+            v.addEventListener("canplay", () => playVideo(v));
             const badge = document.createElement("div");
             badge.className = "cam-off-badge";
             const av = document.createElement("div");
