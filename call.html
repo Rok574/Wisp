@@ -1,2 +1,2262 @@
 <!DOCTYPE html>
-PLACEHOLDER_REPLACE_WITH_FULL_FILE
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="WispRTC">
+    <meta name="theme-color" content="#0b0d12">
+    <title>WispRTC</title>
+    <style>
+        :root {
+            --bg: #0b0d12;
+            --panel: #16181f;
+            --panel-2: #1c1f29;
+            --line: rgba(255,255,255,.08);
+            --text: #f4f6fb;
+            --muted: #9aa3b5;
+            --dim: #6f7890;
+            --accent: #6d7cff;
+            --accent-2: #5460e8;
+            --green: #3dd68c;
+            --red: #f23f42;
+            --safe-bottom: env(safe-area-inset-bottom, 0px);
+            --bar-space: calc(118px + var(--safe-bottom));
+        }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); }
+        body {
+            font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            min-height: 100dvh;
+            display: flex;
+            flex-direction: column;
+            background:
+                radial-gradient(900px 480px at 50% -20%, rgba(109,124,255,.18), transparent 55%),
+                var(--bg);
+        }
+        body.in-call { background: #0b0d12; overflow: hidden; }
+        .topbar {
+            height: 56px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 16px;
+            flex-shrink: 0;
+            z-index: 6;
+        }
+        .brand { display: flex; align-items: center; gap: 10px; font-weight: 760; letter-spacing: -.2px; }
+        .logo {
+            width: 32px; height: 32px; border-radius: 10px;
+            background: linear-gradient(180deg, #8b97ff, #5b67f5);
+            display: grid; place-items: center;
+            box-shadow: 0 8px 20px rgba(91,103,245,.28);
+        }
+        .logo svg { width: 18px; height: 18px; display: block; }
+        .live {
+            display: none; align-items: center; gap: 10px;
+            font-size: 13px; color: var(--muted);
+            background: rgba(255,255,255,.04);
+            border: 1px solid var(--line);
+            padding: 6px 8px 6px 12px;
+            border-radius: 999px;
+        }
+        .live.on { display: flex; }
+        .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+        .net-tag {
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: .4px;
+            text-transform: uppercase;
+            padding: 2px 6px;
+            border-radius: 999px;
+            background: rgba(61,214,140,.16);
+            color: var(--green);
+            margin-left: 6px;
+        }
+        .net-tag:empty { display: none; }
+        .net-tag.relay { background: rgba(109,124,255,.18); color: #9aa8ff; }
+        .net-tag.cell { background: rgba(242,63,66,.16); color: #ff8b8d; }
+        .copy, .gear {
+            border: 0; background: rgba(255,255,255,.08); color: #fff;
+            border-radius: 999px; padding: 6px 11px; font-weight: 650; font-size: 12px;
+        }
+        .gear { width: 34px; padding: 6px 0; }
+        #settingsPanel {
+            display: none;
+            position: absolute;
+            top: 56px;
+            right: 12px;
+            width: min(260px, calc(100vw - 24px));
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            padding: 12px;
+            z-index: 20;
+            box-shadow: 0 16px 40px rgba(0,0,0,.4);
+        }
+        #settingsPanel.on { display: block; }
+        #settingsPanel h3 { margin: 0 0 10px; font-size: 13px; }
+        #settingsPanel button {
+            width: 100%;
+            margin: 0 0 8px;
+            border: 0;
+            border-radius: 10px;
+            padding: 10px;
+            background: #2a2e3a;
+            color: #fff;
+            font-weight: 700;
+        }
+        #cellWarn {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 80;
+            background: rgba(6,8,12,.82);
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+        #cellWarn.on { display: flex; }
+        #cellWarn .sheet {
+            width: min(360px, 100%);
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 20px;
+            padding: 22px 18px 16px;
+            text-align: center;
+        }
+        #cellWarn h2 { margin: 0 0 8px; font-size: 20px; }
+        #cellWarn p { margin: 0 0 16px; color: var(--muted); font-size: 14px; line-height: 1.45; }
+        #cellWarn button {
+            width: 100%;
+            border: 0;
+            border-radius: 12px;
+            padding: 12px;
+            font-weight: 750;
+            color: #fff;
+            background: var(--accent);
+        }
+        #httpsWarn {
+            display: none; margin: 0 16px 12px; padding: 10px 12px;
+            background: #3a2a12; color: #f0c36a; border-radius: 12px; font-size: 13px;
+        }
+        #lobbyWrap {
+            flex: 1; display: flex; align-items: center; justify-content: center;
+            padding: 12px 16px 28px;
+        }
+        body.in-call #lobbyWrap { display: none; }
+        #lobby {
+            width: min(440px, 100%);
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 22px;
+            padding: 28px 24px 22px;
+            box-shadow: 0 24px 80px rgba(0,0,0,.35);
+        }
+        #lobby h2 { margin: 0 0 8px; font-size: 26px; letter-spacing: -.4px; }
+        #lobby p { margin: 0 0 8px; color: var(--muted); font-size: 14px; line-height: 1.45; }
+        label {
+            display: block; font-size: 11px; font-weight: 750;
+            letter-spacing: .5px; color: var(--dim);
+            margin: 16px 0 8px; text-transform: uppercase;
+        }
+        #lobby input {
+            width: 100%; padding: 14px 14px; border: 1px solid var(--line);
+            border-radius: 12px; background: var(--panel-2); color: var(--text);
+            font-size: 16px; outline: none;
+        }
+        #lobby input:focus { border-color: var(--accent); }
+        .actions { display: flex; gap: 10px; margin-top: 20px; }
+        .actions button {
+            flex: 1; border: 0; border-radius: 12px; padding: 13px 10px;
+            font-weight: 750; font-size: 15px; color: #fff;
+        }
+        .go { background: var(--accent); }
+        .go:active { background: var(--accent-2); }
+        .ghost { background: #2a2e3a; }
+        .user-row {
+            display: flex; align-items: center; gap: 10px;
+            margin-top: 16px; color: var(--muted); font-size: 13px;
+        }
+        .school-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-top: 14px;
+            padding: 12px 14px;
+            border: 1px solid var(--line);
+            background: var(--panel-2);
+            border-radius: 14px;
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.35;
+            text-transform: none;
+            letter-spacing: 0;
+            font-weight: 500;
+        }
+        .school-row .school-copy { min-width: 0; flex: 1; }
+        .school-row strong { color: var(--text); display: block; font-size: 14px; margin-bottom: 2px; }
+        .school-row input { position: absolute; opacity: 0; pointer-events: none; }
+        .switch {
+            width: 44px; height: 26px; border-radius: 999px;
+            background: #3a4050; position: relative; flex-shrink: 0;
+        }
+        .switch::after {
+            content: "";
+            position: absolute; top: 3px; left: 3px;
+            width: 20px; height: 20px; border-radius: 50%;
+            background: #fff; transition: transform .18s ease;
+        }
+        #schoolMode:checked + .switch { background: var(--accent); }
+        #schoolMode:checked + .switch::after { transform: translateX(18px); }
+        .ava {
+            width: 28px; height: 28px; border-radius: 50%;
+            display: grid; place-items: center; font-weight: 800; color: #fff; font-size: 12px;
+            background: var(--accent);
+        }
+        #stage {
+            display: none;
+            flex: 1;
+            position: relative;
+            min-height: 0;
+        }
+        body.in-call #stage { display: block; height: 100%; min-height: 0; }
+        #videos {
+            height: 100%;
+            display: grid;
+            gap: 12px;
+            padding: 4px 16px var(--bar-space);
+            align-content: stretch;
+            justify-items: stretch;
+            grid-template-columns: 1fr;
+            grid-auto-rows: minmax(0, 1fr);
+        }
+        #videos.one { grid-template-columns: 1fr; }
+        #videos.count-2 { grid-template-columns: 1fr; grid-template-rows: 1fr; }
+        #videos.count-2:not(.focus) .tile.local {
+            position: absolute;
+            width: min(148px, 38vw);
+            height: min(210px, 34vh);
+            right: 14px;
+            bottom: var(--bar-space);
+            z-index: 5;
+            border-radius: 14px;
+            box-shadow: 0 12px 28px rgba(0,0,0,.45);
+        }
+        #videos.count-3, #videos.count-4 { grid-template-columns: 1fr 1fr; }
+        #videos.count-5, #videos.count-6, #videos.count-7, #videos.count-8, #videos.count-9 {
+            grid-template-columns: 1fr 1fr 1fr;
+        }
+        #videos.many {
+            overflow: auto;
+            grid-auto-rows: minmax(140px, 1fr);
+        }
+        #videos.many .tile.local {
+            position: relative !important;
+            width: auto !important;
+            height: auto !important;
+            right: auto !important;
+            bottom: auto !important;
+            box-shadow: none;
+        }
+        .tile {
+            position: relative;
+            background: #12141b;
+            border-radius: 18px;
+            overflow: hidden;
+            min-height: 0;
+            min-width: 0;
+            border: 1px solid var(--line);
+            cursor: pointer;
+        }
+        .tile.focused { cursor: zoom-out; border-color: rgba(109,124,255,.45); }
+        #videos.focus {
+            grid-template-columns: 1fr !important;
+            grid-template-rows: 1fr;
+        }
+        #videos.focus > .tile { display: none; }
+        #videos.focus > .tile.focused {
+            display: block;
+            position: relative !important;
+            width: auto !important;
+            height: auto !important;
+            right: auto !important;
+            bottom: auto !important;
+            min-height: 0;
+            z-index: 1;
+            box-shadow: none;
+        }
+        #videos.focus > .tile.local:not(.focused) {
+            display: block;
+            position: absolute !important;
+            width: min(160px, 34vw) !important;
+            height: 100px !important;
+            right: 16px !important;
+            bottom: var(--bar-space) !important;
+            z-index: 6;
+            border-radius: 14px;
+            box-shadow: 0 12px 32px rgba(0,0,0,.45);
+        }
+        #videos.focus > .tile.focused.sharing video,
+        #videos.focus > .tile.focused.fit video { object-fit: contain; }
+        video {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover !important;
+            object-position: center;
+            background: #0a0c11;
+            display: block;
+        }
+        .tile.fit video { object-fit: contain !important; }
+        .tile.sharing video { object-fit: contain !important; }
+        .tile video { object-fit: contain !important; }
+        .tile.local video { transform: scaleX(-1); }
+        .tile.remote.front-cam video { transform: scaleX(-1); }
+        .tile.local.back-camera video,
+        .tile.local.sharing video,
+        .tile.remote.sharing video,
+        .tile.remote.back-cam video { transform: none; }
+        .tile.cam-off video { opacity: 0; }
+        .cam-off-badge {
+            display: none; position: absolute; inset: 0;
+            align-items: center; justify-content: center; flex-direction: column; gap: 10px;
+            background: #141722; color: var(--muted); font-size: 13px; font-weight: 700;
+        }
+        .tile.cam-off .cam-off-badge { display: flex; }
+        .tile-wait {
+            display: none;
+            position: absolute;
+            inset: 0;
+            z-index: 4;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 10px;
+            background: rgba(10,12,18,.55);
+            color: #fff;
+            font-size: 13px;
+            font-weight: 750;
+        }
+        .tile.waiting .tile-wait {
+            display: flex;
+            background: rgba(10,12,18,.78);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+        }
+        .tile.waiting video,
+        .tile.waiting .tile-snap {
+            filter: blur(22px) saturate(.5);
+            transform: scale(1.12);
+        }
+        .tile-snap {
+            display: none;
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: 1;
+            filter: saturate(.85);
+        }
+        .tile.waiting .tile-snap[src] { display: block; }
+        .tile.cam-off .tile-snap,
+        .tile.cam-off.waiting .tile-snap { display: none !important; }
+        .tile.cam-off.waiting .tile-wait { display: none; }
+        .spin {
+            width: 28px; height: 28px; border-radius: 50%;
+            border: 3px solid rgba(255,255,255,.2);
+            border-top-color: #fff;
+            animation: spin .7s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .cam-off-badge .ava { width: 72px; height: 72px; font-size: 26px; }
+        .tile .tile-btns { display: none !important; }
+        .tile.local .label { display: none !important; }
+        .tile .micdot { display: none !important; }
+        .tile .label ~ .label { display: none !important; }
+        .label {
+            position: absolute; left: 12px; bottom: 12px;
+            font-size: 13px; font-weight: 700;
+            background: rgba(10,12,18,.72);
+            backdrop-filter: blur(10px);
+            padding: 6px 10px; border-radius: 999px;
+            display: flex; align-items: center; gap: 7px;
+            max-width: min(70%, 220px);
+            z-index: 2;
+            pointer-events: none;
+            white-space: nowrap;
+            overflow: hidden;
+        }
+        .micdot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
+        .micdot.off { background: var(--red); }
+        .tile-btns { position: absolute; right: 12px; bottom: 12px; display: flex; gap: 6px; z-index: 2; }
+        .tile-btns button {
+            height: 32px; padding: 0 10px; border: 0; border-radius: 999px;
+            background: rgba(10,12,18,.72); color: #fff; font-size: 12px; font-weight: 700;
+        }
+        .tile-btns button.on { background: var(--red); }
+        .share-pill {
+            display: none;
+            position: absolute; top: 12px; left: 12px;
+            font-size: 11px; font-weight: 800; letter-spacing: .3px;
+            background: var(--accent); color: #fff;
+            padding: 5px 10px; border-radius: 999px; z-index: 2;
+        }
+        .tile.sharing .share-pill { display: block; }
+        .tile.sharing video { object-fit: contain !important; }
+        @media (min-width: 760px) {
+            #videos.count-2 { grid-template-columns: 1fr; padding-right: 16px; }
+            #videos:not(.one) .tile.local {
+                position: absolute;
+                width: min(260px, 30vw);
+                height: min(168px, 22vh);
+                right: 22px;
+                bottom: var(--bar-space);
+                z-index: 5;
+                border-radius: 16px;
+                box-shadow: 0 16px 40px rgba(0,0,0,.4);
+            }
+            #videos.count-3, #videos.count-4 { grid-template-columns: 1fr 1fr; }
+            #videos.count-5, #videos.count-6, #videos.count-7, #videos.count-8, #videos.count-9 {
+                grid-template-columns: 1fr 1fr 1fr;
+            }
+            #videos.many .tile.local {
+                position: relative !important;
+                width: auto !important;
+                height: auto !important;
+            }
+        }
+        @media (max-width: 759px) {
+            #videos { padding: 0 12px var(--bar-space); gap: 10px; }
+            #videos.count-2 .tile.local { min-height: 0; }
+            .tile { border-radius: 16px; }
+        }
+        .bar {
+            position: fixed; left: 50%; bottom: calc(16px + var(--safe-bottom));
+            transform: translateX(-50%);
+            display: none;
+            align-items: center; gap: 8px;
+            padding: 10px 12px;
+            background: rgba(22,24,31,.86);
+            border: 1px solid var(--line);
+            backdrop-filter: blur(16px);
+            border-radius: 999px;
+            z-index: 8;
+            max-width: calc(100vw - 16px);
+            overflow-x: auto;
+        }
+        body.in-call .bar { display: flex; }
+        .bar button {
+            width: 48px; height: 48px; border: 0; border-radius: 50%;
+            background: #2a2e3a; color: #fff; font-size: 10px; font-weight: 750;
+            flex-shrink: 0;
+        }
+        .bar button.on { background: var(--red); }
+        .bar #shareBtn.on { background: var(--accent); }
+        .bar #fxBtn.on { background: var(--accent); }
+        .bar #hangup { background: var(--red); width: 56px; }
+        #fxPanel {
+            display: none;
+            position: fixed;
+            left: 50%;
+            bottom: calc(88px + var(--safe-bottom));
+            transform: translateX(-50%);
+            z-index: 9;
+            background: rgba(22,24,31,.94);
+            border: 1px solid var(--line);
+            backdrop-filter: blur(16px);
+            border-radius: 18px;
+            padding: 10px;
+            width: min(420px, calc(100vw - 20px));
+        }
+        #fxPanel.on { display: block; }
+        #fxPanel h3 {
+            margin: 0 8px 8px;
+            font-size: 12px;
+            letter-spacing: .4px;
+            text-transform: uppercase;
+            color: var(--dim);
+        }
+        .fx-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+        }
+        .fx-item {
+            border: 1px solid var(--line);
+            background: #1c1f29;
+            color: #fff;
+            border-radius: 14px;
+            padding: 10px 6px 8px;
+            font-size: 11px;
+            font-weight: 750;
+            min-height: 72px;
+        }
+        .fx-item.on { border-color: var(--accent); background: #262a3d; }
+        .fx-ico { font-size: 22px; display: block; margin-bottom: 4px; }
+        #fxSrc, #fxCanvas {
+            position: fixed;
+            left: -4000px;
+            top: 0;
+            width: 360px;
+            height: 480px;
+            opacity: 0;
+            pointer-events: none;
+            z-index: -1;
+        }
+        .log { display: none; }
+        @media (min-width: 760px) {
+            .bar button { width: 52px; height: 52px; }
+        }
+        @media (orientation: landscape) and (max-height: 520px) {
+            :root { --bar-space: 8px; }
+            body { min-height: 100dvh; }
+            body.in-call .topbar {
+                height: 32px;
+                padding: 0 max(10px, env(safe-area-inset-right)) 0 max(10px, env(safe-area-inset-left));
+            }
+            body.in-call .logo { width: 22px; height: 22px; border-radius: 7px; }
+            body.in-call .logo svg { width: 12px; height: 12px; }
+            body.in-call .brand { font-size: 13px; gap: 8px; }
+            body.in-call .live { padding: 3px 6px 3px 8px; font-size: 11px; }
+            body.in-call .copy { padding: 4px 8px; font-size: 11px; }
+            #lobbyWrap {
+                align-items: stretch;
+                padding: 6px max(12px, env(safe-area-inset-right)) 10px max(12px, env(safe-area-inset-left));
+            }
+            #lobby {
+                width: min(720px, 100%);
+                padding: 14px 16px 12px;
+                border-radius: 16px;
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                grid-template-rows: auto auto auto auto;
+                column-gap: 16px;
+                align-content: start;
+            }
+            #lobby h2 { font-size: 20px; grid-column: 1; margin: 0 0 4px; }
+            #lobby p { display: none; }
+            #lobby label[for="nameInput"], #nameInput { grid-column: 1; }
+            #lobby label[for="roomInput"], #roomInput { grid-column: 2; }
+            #lobby label { margin: 6px 0 6px; }
+            #lobby input { padding: 10px 12px; }
+            #lobby > div[style] { display: none; }
+            #lobby .actions { grid-column: 1 / -1; margin-top: 10px; }
+            #lobby .user-row { grid-column: 1 / -1; margin-top: 8px; }
+            #lobby .school-row { grid-column: 1 / -1; margin-top: 10px; }
+            #videos {
+                padding: 2px 76px 4px max(6px, env(safe-area-inset-left));
+                gap: 8px;
+            }
+            #videos.count-2 { grid-template-columns: 1fr; }
+            #videos.count-2 .tile.local { min-height: 0; }
+            #videos.count-3, #videos.count-4 { grid-template-columns: 1fr 1fr; }
+            #videos:not(.one):not(.focus) .tile.local {
+                position: absolute;
+                width: min(132px, 28vw);
+                height: 78px;
+                right: calc(76px + env(safe-area-inset-right, 0px));
+                bottom: 8px;
+                z-index: 5;
+                border-radius: 12px;
+                box-shadow: 0 10px 24px rgba(0,0,0,.4);
+            }
+            #videos.focus { padding-right: 76px; }
+            #videos.focus > .tile.local:not(.focused) {
+                width: 110px !important;
+                height: 68px !important;
+                right: calc(76px + env(safe-area-inset-right, 0px)) !important;
+                bottom: 8px !important;
+            }
+            .tile { border-radius: 12px; }
+            .label { left: 8px; bottom: 8px; font-size: 12px; padding: 4px 8px; }
+            .tile-btns { right: 8px; bottom: 8px; }
+            .tile-btns button { height: 26px; font-size: 11px; }
+            .cam-off-badge .ava { width: 48px; height: 48px; font-size: 18px; }
+            .bar {
+                left: auto;
+                right: max(6px, env(safe-area-inset-right));
+                top: 50%;
+                bottom: auto;
+                transform: translateY(-50%);
+                flex-direction: column;
+                gap: 6px;
+                padding: 8px;
+                max-width: none;
+                max-height: calc(100dvh - 16px);
+                overflow-y: auto;
+                overflow-x: hidden;
+            }
+            .bar button {
+                width: 40px;
+                height: 40px;
+                font-size: 9px;
+            }
+            .bar #hangup { width: 40px; height: 42px; }
+            #fxPanel {
+                left: auto;
+                right: calc(58px + env(safe-area-inset-right, 0px));
+                top: 50%;
+                bottom: auto;
+                transform: translateY(-50%);
+                width: min(300px, calc(100vw - 90px));
+            }
+            .fx-grid { grid-template-columns: repeat(3, 1fr); }
+        }
+    </style>
+</head>
+<body>
+    <div class="topbar">
+        <div class="brand">
+            <div class="logo" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M5 15c3-8 11-8 14 0" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/>
+                    <path d="M8 16.5c2-4.5 6-4.5 8 0" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/>
+                    <circle cx="12" cy="18.2" r="1.5" fill="#fff"/>
+                </svg>
+            </div>
+            WispRTC
+        </div>
+        <div id="roomChip" class="live">
+            <span class="dot"></span>
+            <span id="roomLabel">room</span>
+            <button id="copyBtn" class="copy" type="button">Copy</button>
+        </div>
+    </div>
+    <div id="httpsWarn">iPhone and iPad need HTTPS for camera and mic.</div>
+    <div id="cellWarn">
+        <div class="sheet">
+            <h2>Cellular data</h2>
+            <p>This site might not work with cellular data. Continue?</p>
+            <button id="cellOk" type="button">Continue</button>
+        </div>
+    </div>
+    <div id="lobbyWrap">
+        <div id="lobby">
+            <h2>Hop into a room</h2>
+            <p>Your username is saved on this device. Share a room code with anyone, even on another WiFi.</p>
+            <label for="nameInput">Username</label>
+            <input id="nameInput" type="text" placeholder="cooluser" maxlength="20" autocomplete="username" autocapitalize="off">
+            <label for="roomInput">Room code</label>
+            <input id="roomInput" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="32" placeholder="Custom code (optional)">
+            <div style="margin-top:7px;color:var(--dim);font-size:12px;">Enter any code to create or join that room.</div>
+            <div class="actions">
+                <button class="go" id="joinBtn" type="button">Join</button>
+                <button class="ghost" id="createBtn" type="button">New room</button>
+            </div>
+            <div class="user-row">
+                <div class="ava" id="previewAva">?</div>
+                <span id="savedHint">No saved username yet</span>
+            </div>
+            
+        </div>
+    </div>
+    <div id="stage">
+        <div id="videos" class="one count-1">
+            <div class="tile local" id="localTile">
+                <video id="localVideo" autoplay playsinline webkit-playsinline muted></video>
+                <div class="share-pill">Sharing screen</div>
+                <div class="cam-off-badge">
+                    <div class="ava" id="localAva">Y</div>
+                    Camera off
+                </div>
+                <div class="label"><span class="micdot" id="localMicDot"></span><span id="localName">You</span><span class="net-tag" id="localNetTag"></span></div>
+                <div class="tile-btns">
+                    <button id="fitBtn" type="button">Fit</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="bar" id="callBar">
+        <button id="muteBtn" type="button">Mute</button>
+        <button id="camBtn" type="button">Video</button>
+        <button id="flipBtn" type="button">Flip</button>
+        <button id="shareBtn" type="button">Share</button>
+        <button id="fxBtn" type="button">FX</button>
+        <button id="hangup" type="button">Leave</button>
+    </div>
+    <div id="fxPanel">
+        <h3>Effects</h3>
+        <div class="fx-grid">
+            <button class="fx-item on" data-fx="off" type="button"><span class="fx-ico">🚫</span>None</button>
+            <button class="fx-item" data-fx="glasses" type="button"><span class="fx-ico">🤓</span>Glasses</button>
+            <button class="fx-item" data-fx="ears" type="button"><span class="fx-ico">🐱</span>Cat ears</button>
+            <button class="fx-item" data-fx="party" type="button"><span class="fx-ico">😻</span>Glasses + ears</button>
+        </div>
+    </div>
+    <video id="fxSrc" autoplay muted playsinline webkit-playsinline></video>
+    <canvas id="fxCanvas"></canvas>
+    <div id="statusLog" class="log"></div>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+        import {
+            getDatabase, ref, set, push, onValue, onChildAdded, onChildRemoved, remove, runTransaction, onDisconnect
+        } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js";
+        const firebaseConfig = {
+            apiKey: "AIzaSyCjbcnSZc5uEcbEqgn68H-CLx2MoMpuqgA",
+            authDomain: "jhghugjh-432da.firebaseapp.com",
+            databaseURL: "https://jhghugjh-432da-default-rtdb.firebaseio.com",
+            projectId: "jhghugjh-432da",
+            storageBucket: "jhghugjh-432da.firebasestorage.app",
+            messagingSenderId: "138235206183",
+            appId: "1:138235206183:web:a49161586a06401664cc02",
+            measurementId: "G-BDTG9XPRSQ"
+        };
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        const USER_KEY = "wisprtc.username";
+        const SCHOOL_KEY = "wisprtc.school";
+        const FIT_KEY = "wisprtc.fill";
+        const CLIENT_KEY = "wisprtc.clientId";
+        const STALE_MS = 720000;
+        const COLORS = ["#6d7cff","#3dd68c","#f5c542","#eb459e","#f23f42","#00a8fc","#f26522","#b57bff"];
+        const EXTRA_TURN = [];
+        const iceConfig = {
+            iceServers: [
+                { urls: [
+                    "stun:stun.l.google.com:19302",
+                    "stun:stun1.l.google.com:19302",
+                    "stun:stun.cloudflare.com:3478"
+                ]},
+                {
+                    urls: [
+                        "turn:openrelay.metered.ca:80",
+                        "turn:openrelay.metered.ca:80?transport=tcp",
+                        "turn:openrelay.metered.ca:443?transport=tcp",
+                        "turns:openrelay.metered.ca:443",
+                        "turn:openrelay.metered.ca:443?transport=tcp"
+                    ],
+                    username: "openrelayproject",
+                    credential: "openrelayproject"
+                },
+                ...EXTRA_TURN
+            ],
+            iceCandidatePoolSize: 2
+        };
+        const iceRelayOnly = {
+            iceServers: iceConfig.iceServers.filter(s => {
+                const list = [].concat(s.urls || []);
+                return list.some(x => String(x).startsWith("turn"));
+            }),
+            iceTransportPolicy: "relay",
+            iceCandidatePoolSize: 2
+        };
+        function onCellular() {
+            const c = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+            if (c?.type === "cellular") return true;
+            if (c?.effectiveType && /2g|3g/.test(c.effectiveType) && c.type !== "wifi") return true;
+            return false;
+        }
+        function sameLan(info) {
+            return !!(info && info.net && myNetHash && info.net === myNetHash);
+        }
+        function setNetTag(el, kind) {
+            if (!el) return;
+            if (!kind) { el.textContent = ""; el.className = "net-tag"; return; }
+            el.textContent = kind;
+            el.className = "net-tag" + (kind === "Relay" ? " relay" : kind === "Cellular" ? " cell" : "");
+        }
+        function refreshNetBadge() {
+            const localTag = document.getElementById("localNetTag");
+            const remotes = [...document.querySelectorAll(".tile.remote")];
+            setNetTag(localTag, "");
+            if (!remotes.length) return;
+            remotes.forEach(t => {
+                const tag = t.querySelector(".net-tag");
+                const kind = t.classList.contains("same-net") ? "LAN" : "Relay";
+                setNetTag(tag, kind);
+            });
+            const lan = remotes.filter(t => t.classList.contains("same-net")).length;
+            const other = remotes.length - lan;
+            setNetTag(localTag, "");
+        }
+        function schoolOn() {
+            return false;
+        }
+        async function hashText(s) {
+            const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("wisprtc-net|" + s));
+            return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("").slice(0, 12);
+        }
+        async function detectNetHash() {
+            let ip = "";
+            try {
+                const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+                pc.createDataChannel("n");
+                await new Promise(resolve => {
+                    const t = setTimeout(resolve, 1200);
+                    pc.onicecandidate = ev => {
+                        if (!ev.candidate) {
+                            clearTimeout(t);
+                            resolve();
+                            return;
+                        }
+                        const c = ev.candidate;
+                        const typ = c.type || (c.candidate || "").split(" typ ")[1]?.split(" ")[0];
+                        if (typ === "srflx") {
+                            const m = (c.candidate || "").match(/([0-9]{1,3}(?:\.[0-9]{1,3}){3})/);
+                            if (m) ip = m[1];
+                        }
+                    };
+                    pc.createOffer().then(o => pc.setLocalDescription(o));
+                });
+                pc.close();
+            } catch (_) {}
+            myNetHash = ip ? await hashText(ip) : "";
+            return myNetHash;
+        }
+        function iceForCall(forceRelay, info) {
+            return {
+                iceServers: iceConfig.iceServers,
+                iceTransportPolicy: forceRelay ? "relay" : "all",
+                iceCandidatePoolSize: 2
+            };
+        }
+        const videosEl = document.getElementById("videos");
+        const localVideo = document.getElementById("localVideo");
+        const localTile = document.getElementById("localTile");
+        const localName = document.getElementById("localName");
+        const roomInput = document.getElementById("roomInput");
+        const nameInput = document.getElementById("nameInput");
+        const roomChip = document.getElementById("roomChip");
+        const roomLabel = document.getElementById("roomLabel");
+        const muteBtn = document.getElementById("muteBtn");
+        const camBtn = document.getElementById("camBtn");
+        const flipBtn = document.getElementById("flipBtn");
+        const shareBtn = document.getElementById("shareBtn");
+        const fxBtn = document.getElementById("fxBtn");
+        const pipBtn = null;
+        const fxPanel = document.getElementById("fxPanel");
+        const fxSrc = document.getElementById("fxSrc");
+        const fxCanvas = document.getElementById("fxCanvas");
+        const fxCtx = fxCanvas.getContext("2d", { willReadFrequently: true });
+        const fitBtn = document.getElementById("fitBtn");
+        const statusLog = document.getElementById("statusLog");
+        const previewAva = document.getElementById("previewAva");
+        const savedHint = document.getElementById("savedHint");
+        const localAva = document.getElementById("localAva");
+        const localMicDot = document.getElementById("localMicDot");
+        if (!window.isSecureContext) document.getElementById("httpsWarn").style.display = "block";
+        let localStream = null;
+        let cameraStream = null;
+        let screenStream = null;
+        let myId = null;
+        let roomId = null;
+        let displayName = "You";
+        let facing = "user";
+        let micOn = true;
+        let camOn = true;
+        let sharing = false;
+        let fxMode = "off";
+        let fxLandmarker = null;
+        let fxRaf = 0;
+        let fxStream = null;
+        let fxLastLm = null;
+        let fxReady = false;
+        let fillMode = false;
+        const peers = new Map();
+        let participantsUnsub = null;
+        let removedUnsub = null;
+        let partsValueUnsub = null;
+        let heartbeatTimer = null;
+        let pruneTimer = null;
+        let reconnectTimer = null;
+        let previewTimer = null;
+        let previewUnsub = null;
+        let myNetHash = "";
+        let callGen = 0;
+        const peerGen = new Map();
+        let netDown = false;
+        const previewCanvas = document.createElement("canvas");
+        function storeGet(key) {
+            try { return localStorage.getItem(key) || ""; } catch (_) { return ""; }
+        }
+        function storeSet(key, val) {
+            try { localStorage.setItem(key, val); } catch (_) {}
+        }
+        function colorFor(name) {
+            let n = 0;
+            for (const ch of String(name)) n = (n + ch.charCodeAt(0)) % COLORS.length;
+            return COLORS[n];
+        }
+        function initial(name) {
+            return (String(name || "?").trim()[0] || "?").toUpperCase();
+        }
+        function paintAva(el, name) {
+            if (!el) return;
+            el.textContent = initial(name);
+            el.style.background = colorFor(name || "?");
+        }
+        function log(t) { statusLog.textContent = t; console.log(t); }
+        function uid() {
+            return Math.random().toString(36).slice(2, 8).toUpperCase();
+        }
+        function cleanRoomCode(raw) {
+            return String(raw || "")
+                .trim()
+                .replace(/[.#$\[\]\/]/g, "")
+                .replace(/\s+/g, "-")
+                .replace(/[^a-zA-Z0-9_-]/g, "")
+                .slice(0, 32)
+                .toUpperCase();
+        }
+        function applyFitMode() {
+            document.querySelectorAll(".tile").forEach(t => {
+                t.classList.remove("fit");
+                t.classList.add("fill");
+            });
+        }
+        function syncCameraMirror() {
+            const track = localStream?.getVideoTracks?.()[0];
+            const mode = track?.getSettings?.().facingMode || facing;
+            localTile.classList.toggle("back-camera", !sharing && mode === "environment");
+            localTile.classList.toggle("sharing", sharing);
+        }
+        async function playVideo(el) { try { await el.play(); } catch (_) {} }
+        let focusedTileId = null;
+        function setFocusedTile(tile) {
+            const id = tile?.id || null;
+            if (focusedTileId && focusedTileId === id) tile = null;
+            document.querySelectorAll(".tile.focused").forEach(t => t.classList.remove("focused"));
+            if (!tile || videosEl.children.length <= 1) {
+                focusedTileId = null;
+                videosEl.classList.remove("focus");
+                layout();
+                return;
+            }
+            tile.classList.add("focused");
+            focusedTileId = tile.id;
+            videosEl.classList.add("focus");
+            layout();
+            const v = tile.querySelector("video");
+            if (v) playVideo(v);
+        }
+        function bindTileFocus(tile) {
+            if (tile.classList.contains("local")) return;
+            tile.addEventListener("click", (e) => {
+                if (e.target.closest("button")) return;
+                setFocusedTile(tile);
+            });
+        }
+        function layout() {
+            const n = videosEl.children.length;
+            const keepFocus = videosEl.classList.contains("focus");
+            videosEl.className = videosEl.className
+                .replace(/count-\d+/g, "")
+                .replace(/\bone\b/g, "")
+                .replace(/\bfocus\b/g, "")
+                .replace(/\bmany\b/g, "")
+                .trim() + " count-" + n;
+            if (n <= 1) videosEl.classList.add("one");
+            if (n >= 5) videosEl.classList.add("many");
+            let cols = 1;
+            if (n <= 1) cols = 1;
+            else if (n === 2) cols = (window.matchMedia("(orientation: landscape) and (max-height: 520px)").matches) ? 2 : 1;
+            else if (n <= 4) cols = 2;
+            else if (n <= 9) cols = 3;
+            else cols = 4;
+            if (!keepFocus) videosEl.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
+            else videosEl.style.gridTemplateColumns = "1fr";
+            if (keepFocus && focusedTileId && document.getElementById(focusedTileId)) {
+                videosEl.classList.add("focus");
+            } else if (n <= 1) {
+                focusedTileId = null;
+                document.querySelectorAll(".tile.focused").forEach(t => t.classList.remove("focused"));
+            }
+            applyFitMode();
+        }
+        let rotateTimer = 0;
+        async function afterRotate() {
+            layout();
+            videosEl.querySelectorAll("video").forEach(playVideo);
+            try { await fxSrc.play(); } catch (_) {}
+            try { await localVideo.play(); } catch (_) {}
+            if (!sharing && cameraStream) {
+                await startFxPipeline();
+                await pushLocalOutput();
+            }
+        }
+        window.addEventListener("resize", () => {
+            if (!document.body.classList.contains("in-call")) return;
+            layout();
+            clearTimeout(rotateTimer);
+            rotateTimer = setTimeout(afterRotate, 280);
+        });
+        window.addEventListener("orientationchange", () => {
+            clearTimeout(rotateTimer);
+            rotateTimer = setTimeout(afterRotate, 350);
+        });
+        function cleanUsername(raw) {
+            return String(raw || "").replace(/\s+/g, " ").trim().slice(0, 20);
+        }
+        function refreshUserPreview() {
+            const name = cleanUsername(nameInput.value) || storeGet(USER_KEY);
+            paintAva(previewAva, name || "?");
+            savedHint.textContent = name ? ("Saved as " + name) : "No saved username yet";
+        }
+        nameInput.value = storeGet(USER_KEY);
+        refreshUserPreview();
+        detectNetHash().catch(() => {});
+        
+        applyFitMode();
+        bindTileFocus(localTile);
+        document.addEventListener("keydown", (e) => {
+            if (e.key === "Escape" && focusedTileId) setFocusedTile(null);
+        });
+        nameInput.addEventListener("input", () => {
+            const name = cleanUsername(nameInput.value);
+            if (name) storeSet(USER_KEY, name);
+            refreshUserPreview();
+        });
+        async function attachLocal(stream) {
+            const cur = localVideo.srcObject;
+            const same = cur && stream && cur.getVideoTracks()[0] && stream.getVideoTracks()[0]
+                && cur.getVideoTracks()[0].id === stream.getVideoTracks()[0].id;
+            if (!same) localVideo.srcObject = stream;
+            localVideo.muted = true;
+            localVideo.setAttribute("playsinline", "");
+            localVideo.setAttribute("webkit-playsinline", "");
+            await new Promise(resolve => {
+                if (localVideo.readyState >= 2) return resolve();
+                const done = () => {
+                    localVideo.removeEventListener("loadedmetadata", done);
+                    localVideo.removeEventListener("canplay", done);
+                    resolve();
+                };
+                localVideo.addEventListener("loadedmetadata", done);
+                localVideo.addEventListener("canplay", done);
+                setTimeout(resolve, 800);
+            });
+            await playVideo(localVideo);
+        }
+        async function getMedia(face = facing) {
+            if (!navigator.mediaDevices?.getUserMedia) {
+                throw new Error("Need HTTPS for camera on iPhone/iPad");
+            }
+            const audio = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+            const tries = [
+                { video: { facingMode: { exact: face } }, audio },
+                { video: { facingMode: { ideal: face } }, audio },
+                { video: { facingMode: face }, audio },
+                { video: true, audio: true }
+            ];
+            let last;
+            for (const c of tries) {
+                try { return await navigator.mediaDevices.getUserMedia(c); }
+                catch (e) { last = e; }
+            }
+            throw last;
+        }
+        async function replaceOutgoingVideo(track) {
+            for (const { pc } of peers.values()) {
+                const sender = pc.getSenders().find(s => s.track && s.track.kind === "video")
+                    || pc.getSenders().find(s => s.track == null && s.track === null);
+                const videoSender = pc.getSenders().find(s => (s.track && s.track.kind === "video") || s.track == null);
+                const s = pc.getSenders().find(x => x.track?.kind === "video") || pc.getSenders().find(x => !x.track);
+                if (s && track) {
+                    try { await s.replaceTrack(track); } catch (_) {}
+                }
+            }
+        }
+        async function replaceOutgoingAudio(track) {
+            for (const { pc } of peers.values()) {
+                const s = pc.getSenders().find(x => x.track?.kind === "audio");
+                if (s && track) {
+                    try { await s.replaceTrack(track); } catch (_) {}
+                }
+            }
+        }
+        let FX_W = 0;
+        let FX_H = 0;
+        function fxActive() {
+            return !sharing && !!cameraStream;
+        }
+        function lmPt(lm, i, w, h) {
+            return { x: lm[i].x * w, y: lm[i].y * h };
+        }
+        function mapLmToCanvas(lm, sw, sh, cw, ch) {
+            if (!lm || !sw || !sh) return lm;
+            const scale = Math.max(cw / sw, ch / sh);
+            const ox = (cw - sw * scale) / 2;
+            const oy = (ch - sh * scale) / 2;
+            return lm.map(p => ({
+                x: (p.x * sw * scale + ox) / cw,
+                y: (p.y * sh * scale + oy) / ch,
+                z: p.z
+            }));
+        }
+        function lerpLm(lm) {
+            if (!fxLastLm || fxLastLm.length !== lm.length) {
+                fxLastLm = lm.map(p => ({ x: p.x, y: p.y, z: p.z }));
+                return fxLastLm;
+            }
+            fxLastLm = lm.map((p, i) => ({
+                x: fxLastLm[i].x * 0.65 + p.x * 0.35,
+                y: fxLastLm[i].y * 0.65 + p.y * 0.35,
+                z: p.z
+            }));
+            return fxLastLm;
+        }
+        function drawCatEar(ctx, tip, baseL, baseR, inner) {
+            ctx.save();
+            ctx.shadowColor = "rgba(0,0,0,.35)";
+            ctx.shadowBlur = 10;
+            ctx.beginPath();
+            ctx.moveTo(baseL.x, baseL.y);
+            ctx.quadraticCurveTo(
+                (baseL.x + tip.x) / 2 + (baseL.x - baseR.x) * 0.22,
+                (baseL.y + tip.y) / 2,
+                tip.x, tip.y
+            );
+            ctx.quadraticCurveTo(
+                (baseR.x + tip.x) / 2 + (baseR.x - baseL.x) * 0.22,
+                (baseR.y + tip.y) / 2,
+                baseR.x, baseR.y
+            );
+            ctx.closePath();
+            const fur = ctx.createLinearGradient(baseL.x, baseL.y, tip.x, tip.y);
+            fur.addColorStop(0, "#5a3a24");
+            fur.addColorStop(0.45, "#3a2418");
+            fur.addColorStop(1, "#1c100a");
+            ctx.fillStyle = fur;
+            ctx.fill();
+            ctx.shadowBlur = 0;
+            ctx.strokeStyle = "#0d0806";
+            ctx.lineWidth = 2.4;
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(inner.l.x, inner.l.y);
+            ctx.quadraticCurveTo(inner.tip.x, inner.tip.y, inner.tip.x, inner.tip.y);
+            ctx.lineTo(inner.r.x, inner.r.y);
+            ctx.closePath();
+            const pink = ctx.createLinearGradient(inner.l.x, inner.l.y, inner.tip.x, inner.tip.y);
+            pink.addColorStop(0, "#ffd0de");
+            pink.addColorStop(0.4, "#ff7eab");
+            pink.addColorStop(1, "#e84a7a");
+            ctx.fillStyle = pink;
+            ctx.fill();
+            ctx.fillStyle = "rgba(255,255,255,.35)";
+            ctx.beginPath();
+            ctx.moveTo(baseL.x * 0.4 + tip.x * 0.6, baseL.y * 0.4 + tip.y * 0.6);
+            ctx.lineTo(tip.x, tip.y);
+            ctx.lineTo(baseL.x * 0.62 + tip.x * 0.38, baseL.y * 0.62 + tip.y * 0.38);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+        }
+        function roundedLens(ctx, x, y, rw, rh, rot) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.rotate(rot);
+            const r = Math.min(rw, rh) * 0.42;
+            ctx.beginPath();
+            ctx.moveTo(-rw + r, -rh);
+            ctx.lineTo(rw - r, -rh);
+            ctx.quadraticCurveTo(rw, -rh, rw, -rh + r);
+            ctx.lineTo(rw, rh - r);
+            ctx.quadraticCurveTo(rw, rh, rw - r, rh);
+            ctx.lineTo(-rw + r, rh);
+            ctx.quadraticCurveTo(-rw, rh, -rw, rh - r);
+            ctx.lineTo(-rw, -rh + r);
+            ctx.quadraticCurveTo(-rw, -rh, -rw + r, -rh);
+            ctx.closePath();
+            ctx.restore();
+        }
+        function drawGlasses(ctx, lm, w, h) {
+            const lOuter = lmPt(lm, 33, w, h);
+            const lInner = lmPt(lm, 133, w, h);
+            const rInner = lmPt(lm, 362, w, h);
+            const rOuter = lmPt(lm, 263, w, h);
+            const lIris = lm[468] ? lmPt(lm, 468, w, h) : { x: (lOuter.x + lInner.x) / 2, y: (lOuter.y + lInner.y) / 2 };
+            const rIris = lm[473] ? lmPt(lm, 473, w, h) : { x: (rOuter.x + rInner.x) / 2, y: (rOuter.y + rInner.y) / 2 };
+            const bridge = lmPt(lm, 168, w, h);
+            const roll = Math.atan2(rIris.y - lIris.y, rIris.x - lIris.x);
+            const eyeW = (Math.hypot(lOuter.x - lInner.x, lOuter.y - lInner.y) + Math.hypot(rOuter.x - rInner.x, rOuter.y - rInner.y)) / 2;
+            const rw = eyeW * 0.72;
+            const rh = eyeW * 0.42;
+            const thick = Math.max(2.6, eyeW * 0.09);
+            ctx.save();
+            ctx.lineJoin = "round";
+            ctx.lineCap = "round";
+            function oneLens(c) {
+                roundedLens(ctx, c.x, c.y + rh * 0.08, rw, rh, roll);
+                const glass = ctx.createLinearGradient(c.x - rw, c.y - rh, c.x + rw, c.y + rh);
+                glass.addColorStop(0, "rgba(255,255,255,0.20)");
+                glass.addColorStop(0.35, "rgba(180,200,220,0.08)");
+                glass.addColorStop(1, "rgba(30,40,55,0.14)");
+                ctx.fillStyle = glass;
+                ctx.fill();
+                ctx.strokeStyle = "#141820";
+                ctx.lineWidth = thick;
+                ctx.stroke();
+                ctx.save();
+                ctx.translate(c.x, c.y + rh * 0.08);
+                ctx.rotate(roll);
+                ctx.strokeStyle = "rgba(255,255,255,.5)";
+                ctx.lineWidth = Math.max(1, thick * 0.22);
+                ctx.beginPath();
+                ctx.ellipse(-rw * 0.22, -rh * 0.38, rw * 0.42, rh * 0.16, -0.35, 0, Math.PI);
+                ctx.stroke();
+                ctx.restore();
+            }
+            oneLens(lIris);
+            oneLens(rIris);
+            ctx.strokeStyle = "#141820";
+            ctx.lineWidth = thick * 0.7;
+            const midY = (lIris.y + rIris.y) / 2 + rh * 0.08;
+            ctx.beginPath();
+            ctx.moveTo(lIris.x + rw * 0.92, midY);
+            ctx.quadraticCurveTo(bridge.x, bridge.y + rh * 0.15, rIris.x - rw * 0.92, midY);
+            ctx.stroke();
+            ctx.lineWidth = thick * 0.55;
+            ctx.beginPath();
+            ctx.arc(lIris.x + rw * 0.15, midY + rh * 0.55, thick * 0.7, 0, Math.PI);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(rIris.x - rw * 0.15, midY + rh * 0.55, thick * 0.7, 0, Math.PI);
+            ctx.stroke();
+            const arm = rw * 1.15;
+            ctx.lineWidth = thick * 0.75;
+            ctx.beginPath();
+            ctx.moveTo(lIris.x - rw, midY);
+            ctx.lineTo(lIris.x - rw - Math.cos(roll) * arm, midY - Math.sin(roll) * arm * 0.15);
+            ctx.moveTo(rIris.x + rw, midY);
+            ctx.lineTo(rIris.x + rw + Math.cos(roll) * arm, midY - Math.sin(roll) * arm * 0.15);
+            ctx.stroke();
+            ctx.restore();
+        }
+        function drawEars(ctx, lm, w, h) {
+            const top = lmPt(lm, 10, w, h);
+            const crown = lm[151] ? lmPt(lm, 151, w, h) : top;
+            const chin = lmPt(lm, 152, w, h);
+            const lBrow = lm[67] ? lmPt(lm, 67, w, h) : lmPt(lm, 127, w, h);
+            const rBrow = lm[297] ? lmPt(lm, 297, w, h) : lmPt(lm, 356, w, h);
+            const upx = crown.x - chin.x;
+            const upy = crown.y - chin.y;
+            const ulen = Math.hypot(upx, upy) || 1;
+            const ux = upx / ulen, uy = upy / ulen;
+            const px = -uy, py = ux;
+            const earH = ulen * 0.36;
+            const earW = ulen * 0.155;
+            function ear(anchor, dir) {
+                const base = {
+                    x: anchor.x + ux * ulen * 0.28 + px * dir * ulen * 0.22,
+                    y: anchor.y + uy * ulen * 0.28 + py * dir * ulen * 0.22
+                };
+                const tip = {
+                    x: base.x + ux * earH + px * dir * earW * 0.55,
+                    y: base.y + uy * earH + py * dir * earW * 0.55
+                };
+                const innerEdge = { x: base.x - px * dir * earW, y: base.y - py * dir * earW };
+                const outerEdge = { x: base.x + px * dir * earW * 0.85, y: base.y + py * dir * earW * 0.85 };
+                const inner = {
+                    tip: {
+                        x: base.x + ux * earH * 0.62 + px * dir * earW * 0.28,
+                        y: base.y + uy * earH * 0.62 + py * dir * earW * 0.28
+                    },
+                    l: {
+                        x: base.x + ux * earW * 0.25 - px * dir * earW * 0.42,
+                        y: base.y + uy * earW * 0.25 - py * dir * earW * 0.42
+                    },
+                    r: {
+                        x: base.x + ux * earW * 0.25 + px * dir * earW * 0.38,
+                        y: base.y + uy * earW * 0.25 + py * dir * earW * 0.38
+                    }
+                };
+                drawCatEar(ctx, tip, innerEdge, outerEdge, inner);
+            }
+            ear(lBrow, -1);
+            ear(rBrow, 1);
+        }
+        function blurFaceExcept(ctx, w, h, lm) {
+            const small = document.createElement("canvas");
+            const sw = Math.max(40, Math.round(w / 8));
+            const sh = Math.max(24, Math.round(h / 8));
+            small.width = sw;
+            small.height = sh;
+            const sctx = small.getContext("2d");
+            sctx.filter = "blur(8px)";
+            sctx.drawImage(fxCanvas, 0, 0, sw, sh);
+            ctx.drawImage(small, 0, 0, w, h);
+            const top = lmPt(lm, 10, w, h);
+            const chin = lmPt(lm, 152, w, h);
+            const left = lmPt(lm, 234, w, h);
+            const right = lmPt(lm, 454, w, h);
+            const cx = (left.x + right.x) / 2;
+            const cy = (top.y + chin.y) / 2;
+            const rx = Math.hypot(right.x - left.x, right.y - left.y) * 0.62;
+            const ry = Math.hypot(chin.x - top.x, chin.y - top.y) * 0.58;
+            ctx.save();
+            ctx.beginPath();
+            ctx.ellipse(cx, cy, rx, ry, Math.atan2(right.y - left.y, right.x - left.x), 0, Math.PI * 2);
+            ctx.clip();
+            ctx.drawImage(fxSrc, 0, 0, w, h);
+            ctx.restore();
+        }
+        function fakeLandmarks(w, h) {
+            const cx = 0.5, cy = 0.45, fw = 0.22, fh = 0.28;
+            const pts = Array.from({ length: 478 }, () => ({ x: cx, y: cy, z: 0 }));
+            pts[33] = { x: cx - fw * 0.55, y: cy - fh * 0.05, z: 0 };
+            pts[133] = { x: cx - fw * 0.18, y: cy - fh * 0.05, z: 0 };
+            pts[362] = { x: cx + fw * 0.18, y: cy - fh * 0.05, z: 0 };
+            pts[263] = { x: cx + fw * 0.55, y: cy - fh * 0.05, z: 0 };
+            pts[168] = { x: cx, y: cy - fh * 0.12, z: 0 };
+            pts[10] = { x: cx, y: cy - fh * 0.7, z: 0 };
+            pts[152] = { x: cx, y: cy + fh * 0.75, z: 0 };
+            pts[127] = { x: cx - fw * 0.85, y: cy - fh * 0.15, z: 0 };
+            pts[356] = { x: cx + fw * 0.85, y: cy - fh * 0.15, z: 0 };
+            pts[234] = { x: cx - fw, y: cy, z: 0 };
+            pts[454] = { x: cx + fw, y: cy, z: 0 };
+            return pts;
+        }
+        async function loadFaceModel() {
+            if (fxLandmarker) return fxLandmarker;
+            const cdn = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+            const model = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
+            const vision = await import(cdn);
+            const { FaceLandmarker, FilesetResolver } = vision;
+            const files = await FilesetResolver.forVisionTasks(cdn + "/wasm");
+            let lastErr;
+            for (const delegate of ["GPU", "CPU"]) {
+                try {
+                    fxLandmarker = await FaceLandmarker.createFromOptions(files, {
+                        baseOptions: { modelAssetPath: model, delegate },
+                        runningMode: "VIDEO",
+                        numFaces: 1
+                    });
+                    fxReady = true;
+                    log("Effects ready (" + delegate + ")");
+                    return fxLandmarker;
+                } catch (e) { lastErr = e; }
+            }
+            throw lastErr || new Error("Face model failed");
+        }
+        function stopFxLoop() {
+            if (fxRaf) cancelAnimationFrame(fxRaf);
+            fxRaf = 0;
+        }
+        function paintFx(lm, w, h) {
+            if (fxMode === "glasses" || fxMode === "party") drawGlasses(fxCtx, lm, w, h);
+            if (fxMode === "ears" || fxMode === "party") drawEars(fxCtx, lm, w, h);
+        }
+        async function waitVideoSize(el, ms = 1500) {
+            const start = performance.now();
+            while (performance.now() - start < ms) {
+                if (el.videoWidth >= 160 && el.videoHeight >= 160) return;
+                await new Promise(r => setTimeout(r, 50));
+            }
+        }
+        function drawCover(ctx, src, cw, ch) {
+            const sw = src.videoWidth || src.width || cw;
+            const sh = src.videoHeight || src.height || ch;
+            if (!sw || !sh) return;
+            const scale = Math.max(cw / sw, ch / sh);
+            const dw = sw * scale;
+            const dh = sh * scale;
+            ctx.drawImage(src, (cw - dw) / 2, (ch - dh) / 2, dw, dh);
+        }
+        function fxTick() {
+            if (!fxActive()) {
+                stopFxLoop();
+                return;
+            }
+            const cw = fxCanvas.width;
+            const ch = fxCanvas.height;
+            fxCtx.setTransform(1, 0, 0, 1, 0, 0);
+            fxCtx.filter = "none";
+            fxCtx.fillStyle = "#0a0c11";
+            fxCtx.fillRect(0, 0, cw, ch);
+            if (camOn) {
+            const sw = fxSrc.videoWidth || cw;
+            const sh = fxSrc.videoHeight || ch;
+            const vw = fxSrc.videoWidth || cw;
+            const vh = fxSrc.videoHeight || ch;
+            if (vw >= 160 && vh >= 160 && (Math.abs(vw - cw) > 8 || Math.abs(vh - ch) > 8) && !window.__fxResize) {
+                window.__fxResize = true;
+                FX_W = vw;
+                FX_H = vh;
+                fxCanvas.width = vw;
+                fxCanvas.height = vh;
+                try { fxStream?.getTracks().forEach(t => t.stop()); } catch (_) {}
+                fxStream = fxCanvas.captureStream(30);
+                pushLocalOutput().finally(() => { window.__fxResize = false; });
+            }
+            try { fxCtx.drawImage(fxSrc, 0, 0, fxCanvas.width, fxCanvas.height); } catch (_) {}
+            let used = null;
+            if (fxLandmarker && fxSrc.readyState >= 2 && fxMode !== "off") {
+                try {
+                    const res = fxLandmarker.detectForVideo(fxSrc, performance.now());
+                    if (res?.faceLandmarks?.[0]) used = lerpLm(res.faceLandmarks[0]);
+                } catch (_) {}
+            }
+            if (used) paintFx(used, cw, ch);
+            }
+            fxRaf = requestAnimationFrame(fxTick);
+        }
+        async function startFxPipeline() {
+            if (!cameraStream) return;
+            fxSrc.setAttribute("playsinline", "");
+            fxSrc.muted = true;
+            fxSrc.srcObject = cameraStream;
+            try { await fxSrc.play(); } catch (_) {}
+            await waitVideoSize(fxSrc);
+            const settings = cameraStream.getVideoTracks()[0]?.getSettings?.() || {};
+            if (fxStream && fxStream.getVideoTracks().every(t => t.readyState !== "live")) {
+                fxStream = null;
+            }
+            if (!fxStream) {
+                FX_W = fxSrc.videoWidth || settings.width || 720;
+                FX_H = fxSrc.videoHeight || settings.height || 1280;
+                fxCanvas.width = FX_W;
+                fxCanvas.height = FX_H;
+                fxCanvas.style.width = FX_W + "px";
+                fxCanvas.style.height = FX_H + "px";
+                drawCover(fxCtx, fxSrc, FX_W, FX_H);
+                fxStream = fxCanvas.captureStream(30);
+            }
+            const out = fxStream.getVideoTracks()[0];
+            if (out) out.enabled = true;
+            stopFxLoop();
+            fxTick();
+        }
+        function outgoingVideoTrack() {
+            if (sharing) return screenStream?.getVideoTracks?.()[0];
+            if (fxStream?.getVideoTracks?.()[0]?.readyState === "live") return fxStream.getVideoTracks()[0];
+            return cameraStream?.getVideoTracks?.()[0] || localStream?.getVideoTracks?.()[0];
+        }
+        async function pushLocalOutput() {
+            if (sharing) return;
+            const mixed = new MediaStream();
+            const vt = outgoingVideoTrack();
+            const at = cameraStream?.getAudioTracks?.()[0] || localStream?.getAudioTracks?.()[0];
+            if (vt) mixed.addTrack(vt);
+            if (at) mixed.addTrack(at);
+            localStream = mixed;
+            await attachLocal(localStream);
+            if (vt) await replaceOutgoingVideo(vt);
+            if (at) await replaceOutgoingAudio(at);
+            syncCameraMirror();
+            applyLocalMediaState();
+        }
+        fxBtn.onclick = () => {
+            fxPanel.classList.toggle("on");
+            fxBtn.classList.toggle("on", fxPanel.classList.contains("on") || fxMode !== "off");
+        };
+        fxPanel.addEventListener("click", async (e) => {
+            const btn = e.target.closest("[data-fx]");
+            if (!btn) return;
+            const next = btn.getAttribute("data-fx");
+            fxMode = next;
+            fxPanel.querySelectorAll(".fx-item").forEach(b => b.classList.toggle("on", b === btn));
+            fxBtn.classList.toggle("on", fxMode !== "off" || fxPanel.classList.contains("on"));
+            if (sharing) return;
+            fxLastLm = null;
+            if (fxMode !== "off") {
+                try { await loadFaceModel(); } catch (_) {}
+            }
+            if (!fxStream || fxStream.getVideoTracks().every(t => t.readyState !== "live")) {
+                try {
+                    await startFxPipeline();
+                    await pushLocalOutput();
+                } catch (err) {
+                    console.error(err);
+                    log("Effects failed");
+                }
+            }
+        });
+        function applyLocalMediaState() {
+            if (!localStream) return;
+            localStream.getAudioTracks().forEach(t => t.enabled = micOn);
+            if (!sharing) {
+                cameraStream?.getAudioTracks?.().forEach(t => t.enabled = micOn);
+                if (camOn) cameraStream?.getVideoTracks?.().forEach(t => t.enabled = true);
+                if (fxStream) fxStream.getVideoTracks().forEach(t => t.enabled = camOn);
+            }
+            localTile.classList.toggle("cam-off", !camOn && !sharing);
+            localMicDot.classList.toggle("off", !micOn);
+            muteBtn.classList.toggle("on", !micOn);
+            muteBtn.textContent = micOn ? "Mute" : "Unmute";
+            camBtn.classList.toggle("on", !camOn);
+            camBtn.textContent = camOn ? "Video" : "Cam off";
+            shareBtn.classList.toggle("on", sharing);
+            shareBtn.textContent = sharing ? "Stop" : "Share";
+            flipBtn.disabled = sharing;
+            flipBtn.style.opacity = sharing ? ".45" : "1";
+            syncCameraMirror();
+            publishState();
+        }
+        async function publishState() {
+            if (!roomId || !myId) return;
+            try {
+                await set(ref(db, `rooms/${roomId}/participants/${myId}`), {
+                    name: displayName, micOn, camOn, sharing,
+                    front: facing !== "environment",
+                    net: myNetHash || "",
+                    joinedAt: Date.now(),
+                    seenAt: Date.now(),
+                    gen: callGen
+                });
+            } catch (_) {}
+        }
+        function clientId() {
+            let id = storeGet(CLIENT_KEY);
+            if (!id) {
+                id = uid() + Date.now().toString(36).slice(-4);
+                storeSet(CLIENT_KEY, id);
+            }
+            return id;
+        }
+        function stopPresenceTimers() {
+            clearInterval(heartbeatTimer);
+            clearInterval(pruneTimer);
+            clearInterval(reconnectTimer);
+            clearInterval(previewTimer);
+            heartbeatTimer = pruneTimer = reconnectTimer = previewTimer = null;
+        }
+        function applyPreview(id, data) {
+            if (!id || id === myId) return;
+            const tile = document.getElementById("tile-" + id);
+            if (!tile || !data?.img || tile.classList.contains("cam-off")) return;
+            let img = tile.querySelector(".tile-snap");
+            if (!img) {
+                img = document.createElement("img");
+                img.className = "tile-snap";
+                img.alt = "";
+                tile.insertBefore(img, tile.firstChild.nextSibling);
+            }
+            img.src = data.img;
+        }
+        async function publishPreviewFrame() {
+            if (!roomId || !myId || sharing || !camOn) {
+                if (roomId && myId && !camOn) {
+                    try { await remove(ref(db, `rooms/${roomId}/previews/${myId}`)); } catch (_) {}
+                }
+                return;
+            }
+            try {
+                previewCanvas.width = 160;
+                previewCanvas.height = 90;
+                const ctx = previewCanvas.getContext("2d");
+                const src = (fxCanvas.width > 1 && camOn) ? fxCanvas : (fxSrc.videoWidth ? fxSrc : localVideo);
+                ctx.drawImage(src, 0, 0, 160, 90);
+                const img = previewCanvas.toDataURL("image/jpeg", 0.4);
+                if (img.length > 90000) return;
+                await set(ref(db, `rooms/${roomId}/previews/${myId}`), { img, t: Date.now() });
+            } catch (_) {}
+        }
+        async function pruneStaleParticipants() {
+            if (!roomId) return;
+            try {
+                const snapWait = await new Promise(resolve => {
+                    const off = onValue(ref(db, `rooms/${roomId}/participants`), s => {
+                        off();
+                        resolve(s);
+                    }, { onlyOnce: true });
+                });
+                if (!snapWait.exists()) return;
+                const now = Date.now();
+                snapWait.forEach(child => {
+                    const info = child.val() || {};
+                    const last = info.seenAt || info.joinedAt || 0;
+                    if (child.key !== myId && last && now - last > STALE_MS) {
+                        remove(ref(db, `rooms/${roomId}/participants/${child.key}`));
+                        teardownPeer(child.key);
+                    }
+                });
+            } catch (_) {}
+        }
+        async function clearPeerSignals(remoteId) {
+            if (!roomId || !myId || !remoteId) return;
+            const [x, y] = myId < remoteId ? [myId, remoteId] : [remoteId, myId];
+            try { await remove(ref(db, `rooms/${roomId}/signals/${x}_${y}`)); } catch (_) {}
+        }
+        async function rebuildPeer(remoteId, info = {}, useRelay = false) {
+            const entry = peers.get(remoteId);
+            if (entry?.rebuilding) return;
+            if (entry) entry.rebuilding = true;
+            setPeerWait(remoteId, true, "Reconnecting");
+            if (entry) {
+                entry.unsubscribers.forEach(fn => { try { fn(); } catch (_) {} });
+                try { entry.pc.close(); } catch (_) {}
+                peers.delete(remoteId);
+            }
+            await clearPeerSignals(remoteId);
+            await ensurePeer(remoteId, myId < remoteId, useRelay, info);
+            const done = peers.get(remoteId);
+            if (done) done.rebuilding = false;
+        }
+        function setPeerWait(id, on, text) {
+            const tile = document.getElementById("tile-" + id);
+            if (!tile) return;
+            tile.classList.toggle("waiting", !!on);
+            const label = tile.querySelector("[data-wait]");
+            if (label && text) label.textContent = text;
+            if (!on) tile.classList.remove("snap-on");
+        }
+        async function recoverPeers() {
+            if (!roomId || !localStream) return;
+            for (const [id, entry] of peers.entries()) {
+                const st = entry.pc?.connectionState;
+                if (st === "failed" || st === "disconnected") {
+                    entry.bad = (entry.bad || 0) + 1;
+                    setPeerWait(id, true, "Reconnecting");
+                    try { entry.pc.restartIce(); } catch (_) {}
+                    if (entry.bad >= 3) {
+                        await rebuildPeer(id, {}, false);
+                    }
+                } else if (st === "closed") {
+                    await rebuildPeer(id, {}, false);
+                } else if (st === "connected" || st === "connecting") {
+                    if (document.getElementById("tile-" + id)?.classList.contains("cam-off")) {
+                        entry.bad = 0;
+                        setPeerWait(id, false);
+                        continue;
+                    }
+                    try {
+                        const stats = await entry.pc.getStats();
+                        let bytes = 0;
+                        stats.forEach(r => {
+                            if (r.type === "inbound-rtp" && (r.kind === "video" || r.mediaType === "video")) {
+                                bytes += r.bytesReceived || 0;
+                            }
+                        });
+                        if (bytes === entry.lastBytes) entry.bad = (entry.bad || 0) + 1;
+                        else entry.bad = 0;
+                        entry.lastBytes = bytes;
+                        if (entry.bad >= 4) {
+                            setPeerWait(id, true, "Reconnecting");
+                            await rebuildPeer(id, {}, false);
+                        } else if (entry.bad === 0) {
+                            setPeerWait(id, false);
+                        }
+                    } catch (_) {}
+                }
+            }
+        }
+        async function startMedia() {
+            const live = cameraStream?.getVideoTracks?.().some(t => t.readyState === "live")
+                || localStream?.getVideoTracks?.().some(t => t.readyState === "live");
+            if (localStream && !sharing && live) return localStream;
+            cameraStream = await getMedia();
+            localStream = cameraStream;
+            try {
+                if (fxMode !== "off") await loadFaceModel();
+                await startFxPipeline();
+                await pushLocalOutput();
+                return localStream;
+            } catch (_) {}
+            await attachLocal(localStream);
+            syncCameraMirror();
+            applyLocalMediaState();
+            return localStream;
+        }
+        document.getElementById("createBtn").onclick = async () => {
+            if (!cleanRoomCode(roomInput.value)) roomInput.value = uid();
+            await enter();
+        };
+        document.getElementById("joinBtn").onclick = () => enter();
+        roomInput.addEventListener("input", () => {
+            const start = roomInput.selectionStart;
+            const cleaned = cleanRoomCode(roomInput.value);
+            roomInput.value = cleaned;
+            if (start !== null) {
+                try { roomInput.setSelectionRange(cleaned.length, cleaned.length); } catch (_) {}
+            }
+        });
+        roomInput.addEventListener("keydown", e => {
+            if (e.key === "Enter") {
+                e.preventDefault();
+                enter();
+            }
+        });
+        document.getElementById("copyBtn").onclick = async () => {
+            try { await navigator.clipboard.writeText(roomId); } catch (_) {}
+            document.getElementById("copyBtn").textContent = "Copied";
+            setTimeout(() => document.getElementById("copyBtn").textContent = "Copy", 1200);
+        };
+        muteBtn.onclick = () => { micOn = !micOn; applyLocalMediaState(); };
+        camBtn.onclick = async () => {
+            if (sharing) return;
+            camOn = !camOn;
+            applyLocalMediaState();
+            if (!camOn) {
+                cameraStream?.getVideoTracks?.().forEach(t => t.stop());
+                if (roomId && myId) {
+                    try { remove(ref(db, `rooms/${roomId}/previews/${myId}`)); } catch (_) {}
+                }
+            }
+            if (camOn) {
+                try {
+                    if (fxStream) {
+                        fxStream.getTracks().forEach(t => t.stop());
+                        fxStream = null;
+                    }
+                    FX_W = 0;
+                    FX_H = 0;
+                    const oldCam = cameraStream;
+                    cameraStream = await getMedia(facing);
+                    if (oldCam && oldCam !== cameraStream) oldCam.getTracks().forEach(t => t.stop());
+                    fxSrc.srcObject = cameraStream;
+                    await fxSrc.play();
+                    await startFxPipeline();
+                    localVideo.srcObject = null;
+                    await pushLocalOutput();
+                    localTile.classList.remove("cam-off");
+                    await playVideo(localVideo);
+                } catch (err) {
+                    log("Camera failed");
+                    alert("Could not turn the camera back on.");
+                }
+            }
+        };
+        fitBtn.onclick = () => {
+            fillMode = !fillMode;
+            storeSet(FIT_KEY, fillMode ? "1" : "0");
+            applyFitMode();
+        };
+        flipBtn.onclick = async () => {
+            if (sharing) return;
+            const nextFacing = facing === "user" ? "environment" : "user";
+            flipBtn.disabled = true;
+            try {
+                const next = await getMedia(nextFacing);
+                const old = cameraStream;
+                cameraStream = next;
+                localStream = next;
+                const settings = next.getVideoTracks()[0]?.getSettings?.() || {};
+                facing = settings.facingMode || nextFacing;
+                if (old && old !== next) old.getTracks().forEach(t => t.stop());
+                fxLastLm = null;
+                await startFxPipeline();
+                await pushLocalOutput();
+            } catch (e) { log("Flip failed"); }
+            flipBtn.disabled = sharing;
+        };
+        shareBtn.onclick = () => toggleShare();
+        async function toggleShare() {
+            if (sharing) {
+                await stopShare();
+                return;
+            }
+            if (!navigator.mediaDevices?.getDisplayMedia) {
+                alert("Screen sharing is not available in this browser. Try Chrome or Edge on desktop.");
+                return;
+            }
+            try {
+                screenStream = await navigator.mediaDevices.getDisplayMedia({
+                    video: { frameRate: 15, cursor: "always" },
+                    audio: false
+                });
+            } catch (e) {
+                log("Share cancelled");
+                return;
+            }
+            const screenTrack = screenStream.getVideoTracks()[0];
+            if (!screenTrack) return;
+            sharing = true;
+            stopFxLoop();
+            fxPanel.classList.remove("on");
+            camOn = true;
+            const mixed = new MediaStream();
+            mixed.addTrack(screenTrack);
+            const mic = (cameraStream || localStream)?.getAudioTracks?.()[0];
+            if (mic) mixed.addTrack(mic);
+            localStream = mixed;
+            localVideo.srcObject = localStream;
+            await playVideo(localVideo);
+            applyLocalMediaState();
+            applyFitMode();
+            await replaceOutgoingVideo(screenTrack);
+            screenTrack.onended = () => { stopShare(); };
+        }
+        async function stopShare() {
+            if (!sharing) return;
+            sharing = false;
+            if (screenStream) {
+                screenStream.getTracks().forEach(t => t.stop());
+                screenStream = null;
+            }
+            try {
+                if (!cameraStream || !cameraStream.getVideoTracks().some(t => t.readyState === "live")) {
+                    cameraStream = await getMedia(facing);
+                }
+            } catch (_) {}
+            localStream = cameraStream;
+            if (fxMode !== "off" && cameraStream) {
+                await startFxPipeline();
+                await pushLocalOutput();
+            } else if (localStream) {
+                localVideo.srcObject = localStream;
+                await playVideo(localVideo);
+                const vt = localStream.getVideoTracks()[0];
+                const at = localStream.getAudioTracks()[0];
+                if (vt) await replaceOutgoingVideo(vt);
+                if (at) await replaceOutgoingAudio(at);
+            }
+            applyLocalMediaState();
+            applyFitMode();
+        }
+        async function confirmCellular() {
+            if (!onCellular()) return true;
+            if (sessionStorage.getItem("wisprtc.cellok") === "1") return true;
+            const box = document.getElementById("cellWarn");
+            box.classList.add("on");
+            return await new Promise(resolve => {
+                document.getElementById("cellOk").onclick = () => {
+                    sessionStorage.setItem("wisprtc.cellok", "1");
+                    box.classList.remove("on");
+                    resolve(true);
+                };
+            });
+        }
+        document.getElementById("hangup").onclick = () => leaveRoom(true);
+        async function enter() {
+            displayName = cleanUsername(nameInput.value);
+            if (!displayName) {
+                nameInput.focus();
+                alert("Type a username first.");
+                return;
+            }
+            nameInput.value = displayName;
+            storeSet(USER_KEY, displayName);
+            refreshUserPreview();
+            localName.textContent = displayName;
+            paintAva(localAva, displayName);
+            const typedCode = cleanRoomCode(roomInput.value);
+            const id = typedCode || uid();
+            roomInput.value = id;
+            if (!(await confirmCellular())) return;
+            try { await startMedia(); }
+            catch (err) {
+                alert("Camera or mic blocked. On iPhone use HTTPS and allow Camera and Mic.");
+                return;
+            }
+            try { await detectNetHash(); } catch (_) {}
+            await joinRoom(id);
+        }
+        function setInCall(on) {
+            document.body.classList.toggle("in-call", on);
+        }
+        async function deleteRoomIfEmpty(id) {
+            if (!id) return;
+            try {
+                await runTransaction(ref(db, `rooms/${id}`), current => {
+                    if (!current) return current;
+                    const participants = current.participants || {};
+                    if (Object.keys(participants).length === 0) return null;
+                    return current;
+                });
+            } catch (_) {}
+        }
+        async function joinRoom(id) {
+            id = cleanRoomCode(id);
+            if (!id) throw new Error("Invalid room code");
+            await leaveRoom(false);
+            roomId = id;
+            myId = clientId() + "_" + Date.now().toString(36);
+            callGen += 1;
+            setInCall(true);
+            roomChip.classList.add("on");
+            roomLabel.textContent = roomId;
+            refreshNetBadge();
+            log("In room " + roomId);
+            const meRef = ref(db, `rooms/${roomId}/participants/${myId}`);
+            try { await onDisconnect(ref(db, `rooms/${roomId}/previews/${myId}`)).remove(); } catch (_) {}
+            await publishState();
+            try {
+                const stem = clientId() + "_";
+                onValue(ref(db, `rooms/${roomId}/participants`), snap => {
+                    snap.forEach(ch => {
+                        if (ch.key !== myId && String(ch.key).startsWith(stem)) {
+                            remove(ref(db, `rooms/${roomId}/participants/${ch.key}`));
+                        }
+                    });
+                }, { onlyOnce: true });
+            } catch (_) {}
+            window.addEventListener("pagehide", onPageHide);
+            window.addEventListener("beforeunload", onPageHide);
+            window.addEventListener("online", recoverPeers);
+            document.addEventListener("visibilitychange", onVisible);
+            const partsRef = ref(db, `rooms/${roomId}/participants`);
+            participantsUnsub = onChildAdded(partsRef, async (snap) => {
+                const remoteId = snap.key;
+                if (!remoteId || remoteId === myId) return;
+                const info = snap.val() || {};
+                document.querySelectorAll(".tile.remote").forEach(t => {
+                    const id = t.id.replace(/^tile-/, "");
+                    if (id === remoteId) return;
+                    const n = (t.querySelector("[data-name]")?.textContent || "").replace(/ muted$/, "");
+                    if (info.name && n === info.name) teardownPeer(id);
+                });
+                teardownPeer(remoteId);
+                await ensurePeer(remoteId, myId < remoteId, false, info);
+            });
+            removedUnsub = onChildRemoved(partsRef, async (snap) => {
+                if (snap.key && snap.key !== myId) teardownPeer(snap.key);
+                await deleteRoomIfEmpty(roomId);
+            });
+            partsValueUnsub = onValue(partsRef, (snap) => {
+                if (!snap.exists()) {
+                    deleteRoomIfEmpty(roomId);
+                    return;
+                }
+                const now = Date.now();
+                snap.forEach(child => {
+                    if (child.key === myId) return;
+                    const info = child.val() || {};
+                    const last = info.seenAt || info.joinedAt || 0;
+                    if (last && now - last > STALE_MS) {
+                        remove(ref(db, `rooms/${roomId}/participants/${child.key}`));
+                        teardownPeer(child.key);
+                        return;
+                    }
+                    updateRemoteChrome(child.key, info);
+                    const g = info.gen || 0;
+                    if (peerGen.has(child.key) && peerGen.get(child.key) !== g) {
+                        peerGen.set(child.key, g);
+                        rebuildPeer(child.key, info, false);
+                    } else {
+                        peerGen.set(child.key, g);
+                        ensurePeer(child.key, myId < child.key, false, info);
+                    }
+                });
+            });
+            stopPresenceTimers();
+            heartbeatTimer = setInterval(() => { publishState(); }, 8000);
+            pruneTimer = setInterval(() => { pruneStaleParticipants(); }, 10000);
+            reconnectTimer = setInterval(() => { recoverPeers(); }, 5000);
+            if (previewUnsub) { try { previewUnsub(); } catch (_) {} }
+            previewUnsub = onValue(ref(db, `rooms/${roomId}/previews`), snap => {
+                if (!snap.exists()) return;
+                snap.forEach(child => applyPreview(child.key, child.val() || {}));
+            });
+        }
+        function onVisible() {
+            if (document.visibilityState !== "visible") return;
+            if (!roomId || !myId) return;
+            publishState();
+            videosEl.querySelectorAll("video").forEach(playVideo);
+            recoverPeers();
+            setTimeout(() => {
+                publishState();
+                recoverPeers();
+            }, 800);
+        }
+        async function reconnectAfterNetwork() {
+            if (!roomId || !myId) return;
+            callGen += 1;
+            log("Network changed — rebuilding");
+            await publishState();
+            const ids = [...peers.keys()];
+            for (const id of ids) {
+                try { await rebuildPeer(id, {}, false); } catch (_) {}
+            }
+        }
+        window.addEventListener("offline", () => { netDown = true; });
+        window.addEventListener("online", () => {
+            if (!roomId) return;
+            netDown = false;
+            reconnectAfterNetwork();
+        });
+        if (navigator.connection) {
+            navigator.connection.addEventListener("change", () => {
+                if (!roomId) return;
+                clearTimeout(window.__netT);
+                window.__netT = setTimeout(reconnectAfterNetwork, 400);
+            });
+        }
+        function signalPath(a, b, leaf, relayOnly = false) {
+            const [x, y] = a < b ? [a, b] : [b, a];
+            return `rooms/${roomId}/signals/${x}_${y}/${relayOnly ? "relay" : "p2p"}/${leaf}`;
+        }
+        function updateRemoteChrome(remoteId, info) {
+            const tile = document.getElementById("tile-" + remoteId);
+            if (!tile) return;
+            const nameEl = tile.querySelector("[data-name]");
+            const n = info.name || remoteId.slice(0, 6);
+            if (nameEl) nameEl.textContent = n + (info.micOn === false ? " muted" : "");
+            const dot = tile.querySelector(".micdot");
+            if (dot) dot.classList.toggle("off", info.micOn === false);
+            tile.classList.toggle("cam-off", info.camOn === false && !info.sharing);
+            tile.classList.toggle("sharing", !!info.sharing);
+            tile.classList.toggle("front-cam", info.front !== false && !info.sharing);
+            tile.classList.toggle("back-cam", info.front === false);
+            const sameNet = !!(info.net && myNetHash && info.net === myNetHash);
+            tile.classList.toggle("same-net", sameNet);
+            tile.classList.toggle("school-peer", !!info.school);
+            if (info.camOn === false) {
+                tile.classList.remove("waiting");
+                const snap = tile.querySelector(".tile-snap");
+                if (snap) snap.removeAttribute("src");
+            }
+            paintAva(tile.querySelector(".cam-off-badge .ava"), n);
+            applyFitMode();
+            refreshNetBadge();
+        }
+        function attachLocalTracks(pc) {
+            const stream = localStream || cameraStream;
+            if (!stream) {
+                try { pc.addTransceiver("audio", { direction: "sendrecv" }); } catch (_) {}
+                try { pc.addTransceiver("video", { direction: "sendrecv" }); } catch (_) {}
+                return;
+            }
+            const kinds = new Set();
+            for (const t of stream.getTracks()) {
+                kinds.add(t.kind);
+                const sender = pc.getSenders().find(s => s.track?.kind === t.kind);
+                if (sender) {
+                    try { sender.replaceTrack(t); } catch (_) { try { pc.addTrack(t, stream); } catch (__) {} }
+                } else {
+                    try { pc.addTrack(t, stream); } catch (_) {}
+                }
+            }
+            if (!kinds.has("audio")) try { pc.addTransceiver("audio", { direction: "recvonly" }); } catch (_) {}
+            if (!kinds.has("video")) try { pc.addTransceiver("video", { direction: "recvonly" }); } catch (_) {}
+            pc.getSenders().forEach(async s => {
+                if (s.track?.kind !== "video") return;
+                try {
+                    const n = Math.max(1, peers.size);
+                    const params = s.getParameters();
+                    params.encodings = params.encodings?.length ? params.encodings : [{}];
+                    params.encodings[0].maxBitrate = onCellular() ? 180000 : (n >= 8 ? 250000 : 700000);
+                    params.encodings[0].scaleResolutionDownBy = 1;
+                    await s.setParameters(params);
+                } catch (_) {}
+            });
+        }
+        async function ensurePeer(remoteId, iAmOfferer, relayOnly = false, info = {}) {
+            if (!roomId) return;
+            const existing = peers.get(remoteId);
+            if (existing) {
+                const st = existing.pc.connectionState;
+                if (st === "connected") {
+                    attachLocalTracks(existing.pc);
+                    return;
+                }
+                if (st === "connecting" || st === "new") {
+                    attachLocalTracks(existing.pc);
+                    return;
+                }
+                try { existing.pc.close(); } catch (_) {}
+                existing.unsubscribers.forEach(fn => { try { fn(); } catch (_) {} });
+                peers.delete(remoteId);
+            }
+            if (!localStream && !cameraStream) return;
+            const cfg = iceForCall(relayOnly, info);
+            const pc = new RTCPeerConnection(cfg);
+            const unsubscribers = [];
+            const remoteStream = new MediaStream();
+            peers.set(remoteId, { pc, unsubscribers, remoteStream, muted: false, relayOnly, lastBytes: 0, lastStats: 0 });
+            attachLocalTracks(pc);
+            let tile = document.getElementById("tile-" + remoteId);
+            let v = tile?.querySelector("video");
+            if (!tile) {
+            tile = document.createElement("div");
+            tile.className = "tile remote front-cam";
+            tile.id = "tile-" + remoteId;
+            v = document.createElement("video");
+            v.autoplay = true;
+            v.playsInline = true;
+            v.setAttribute("playsinline", "");
+            v.setAttribute("webkit-playsinline", "");
+            v.srcObject = remoteStream;
+            v.addEventListener("loadedmetadata", () => playVideo(v));
+            v.addEventListener("canplay", () => playVideo(v));
+            v.addEventListener("playing", () => { playVideo(v); setPeerWait(remoteId, false); });
+            const badge = document.createElement("div");
+            badge.className = "cam-off-badge";
+            const av = document.createElement("div");
+            av.className = "ava";
+            paintAva(av, info.name || remoteId);
+            badge.append(av, document.createTextNode("Camera off"));
+            const sharePill = document.createElement("div");
+            sharePill.className = "share-pill";
+            sharePill.textContent = "Sharing screen";
+            const snapImg = document.createElement("img");
+            snapImg.className = "tile-snap";
+            snapImg.alt = "";
+            const waitEl = document.createElement("div");
+            waitEl.className = "tile-wait";
+            waitEl.innerHTML = '<div class="spin"></div><span data-wait>Connecting</span>';
+            const label = document.createElement("div");
+            label.className = "label";
+            const dot = document.createElement("span");
+            dot.className = "micdot";
+            const nameEl = document.createElement("span");
+            nameEl.setAttribute("data-name", "");
+            const netTag = document.createElement("span");
+            netTag.className = "net-tag";
+            nameEl.textContent = info.name || remoteId.slice(0, 6);
+            label.append(dot, nameEl, netTag);
+            const btns = document.createElement("div");
+            btns.className = "tile-btns";
+            const muteThem = document.createElement("button");
+            muteThem.type = "button";
+            muteThem.textContent = "Mute";
+            muteThem.title = "Mute this person for you";
+            muteThem.onclick = () => {
+                const p = peers.get(remoteId);
+                if (!p) return;
+                p.muted = !p.muted;
+                p.remoteStream.getAudioTracks().forEach(t => t.enabled = !p.muted);
+                muteThem.classList.toggle("on", p.muted);
+                muteThem.textContent = p.muted ? "Hear" : "Mute";
+            };
+            btns.appendChild(muteThem);
+            tile.append(v, snapImg, waitEl, sharePill, badge, label, btns);
+            bindTileFocus(tile);
+            videosEl.appendChild(tile);
+            layout();
+            }
+            v.srcObject = remoteStream;
+            playVideo(v);
+            updateRemoteChrome(remoteId, info);
+            pc.ontrack = (ev) => {
+                const incoming = ev.streams && ev.streams[0];
+                const tracks = incoming ? incoming.getTracks() : (ev.track ? [ev.track] : []);
+                tracks.forEach(t => {
+                    if (!remoteStream.getTracks().some(x => x.id === t.id)) remoteStream.addTrack(t);
+                });
+                if (ev.track && !remoteStream.getTracks().some(x => x.id === ev.track.id)) {
+                    remoteStream.addTrack(ev.track);
+                }
+                if (ev.track) {
+                    ev.track.onunmute = () => {
+                        v.srcObject = remoteStream;
+                        playVideo(v);
+                    };
+                    ev.track.onended = () => {
+                        try { remoteStream.removeTrack(ev.track); } catch (_) {}
+                    };
+                }
+                const p = peers.get(remoteId);
+                if (p?.muted) remoteStream.getAudioTracks().forEach(t => t.enabled = false);
+                v.srcObject = remoteStream;
+                v.muted = false;
+                setPeerWait(remoteId, false);
+                playVideo(v);
+            };
+            pc.onconnectionstatechange = () => {
+                log((info.name || remoteId.slice(0, 6)) + ": " + pc.connectionState);
+                if (pc.connectionState === "connected") setPeerWait(remoteId, false);
+                if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
+                    setPeerWait(remoteId, true, "Reconnecting");
+                    try { pc.restartIce(); } catch (_) {}
+                    setTimeout(() => {
+                        const cur = peers.get(remoteId);
+                        if (!cur || cur.pc !== pc) return;
+                        if (pc.connectionState === "connected") return;
+                        rebuildPeer(remoteId, info, true);
+                    }, 3000);
+                }
+            };
+            if (!relayOnly) {
+                const wait = sameLan(info) ? 5000 : (onCellular() ? 3500 : 8000);
+                setTimeout(async () => {
+                    const entry = peers.get(remoteId);
+                    if (!entry || entry.pc !== pc) return;
+                    if (pc.connectionState === "connected" || pc.iceConnectionState === "connected") return;
+                    if (remoteStream.getTracks().length) return;
+                    teardownPeer(remoteId);
+                    await ensurePeer(remoteId, iAmOfferer, true, info);
+                }, wait);
+            }
+            const candRef = ref(db, signalPath(myId, remoteId, "candidates/" + myId, relayOnly));
+            pc.onicecandidate = (ev) => { if (ev.candidate) push(candRef, ev.candidate.toJSON()); };
+            unsubscribers.push(onChildAdded(ref(db, signalPath(myId, remoteId, "candidates/" + remoteId, relayOnly)), (snap) => {
+                if (snap.val()) pc.addIceCandidate(new RTCIceCandidate(snap.val())).catch(() => {});
+            }));
+            const offerRef = ref(db, signalPath(myId, remoteId, "offer", relayOnly));
+            const answerRef = ref(db, signalPath(myId, remoteId, "answer", relayOnly));
+            if (iAmOfferer) {
+                const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
+                await pc.setLocalDescription(offer);
+                await set(offerRef, { type: offer.type, sdp: offer.sdp });
+                unsubscribers.push(onValue(answerRef, async (snap) => {
+                    const data = snap.val();
+                    if (data && !pc.currentRemoteDescription) {
+                        await pc.setRemoteDescription(new RTCSessionDescription(data));
+                    }
+                }));
+            } else {
+                unsubscribers.push(onValue(offerRef, async (snap) => {
+                    const data = snap.val();
+                    if (!data || pc.currentRemoteDescription) return;
+                    await pc.setRemoteDescription(new RTCSessionDescription(data));
+                    const answer = await pc.createAnswer();
+                    await pc.setLocalDescription(answer);
+                    await set(answerRef, { type: answer.type, sdp: answer.sdp });
+                }));
+            }
+        }
+        function teardownPeer(remoteId) {
+            const entry = peers.get(remoteId);
+            if (!entry) return;
+            entry.unsubscribers.forEach(fn => { try { fn(); } catch (_) {} });
+            try { entry.pc.close(); } catch (_) {}
+            peers.delete(remoteId);
+            const gone = "tile-" + remoteId;
+            document.getElementById(gone)?.remove();
+            if (focusedTileId === gone) setFocusedTile(null);
+            else layout();
+        }
+        function onPageHide() {
+            if (roomId && myId) publishState();
+        }
+        function stopAllMedia() {
+            stopFxLoop();
+            try { fxStream?.getTracks().forEach(t => t.stop()); } catch (_) {}
+            try { localStream?.getTracks().forEach(t => t.stop()); } catch (_) {}
+            try { cameraStream?.getTracks().forEach(t => t.stop()); } catch (_) {}
+            try { screenStream?.getTracks().forEach(t => t.stop()); } catch (_) {}
+            fxStream = null;
+            localStream = null;
+            cameraStream = null;
+            screenStream = null;
+            FX_W = 0;
+            FX_H = 0;
+            localVideo.srcObject = null;
+            fxSrc.srcObject = null;
+        }
+        async function leaveRoom(showLobby) {
+            window.removeEventListener("pagehide", onPageHide);
+            window.removeEventListener("beforeunload", onPageHide);
+            window.removeEventListener("online", recoverPeers);
+            document.removeEventListener("visibilitychange", onVisible);
+            stopPresenceTimers();
+            if (participantsUnsub) { try { participantsUnsub(); } catch (_) {} participantsUnsub = null; }
+            if (removedUnsub) { try { removedUnsub(); } catch (_) {} removedUnsub = null; }
+            if (partsValueUnsub) { try { partsValueUnsub(); } catch (_) {} partsValueUnsub = null; }
+            if (previewUnsub) { try { previewUnsub(); } catch (_) {} previewUnsub = null; }
+            [...peers.keys()].forEach(teardownPeer);
+            const leavingRoomId = roomId;
+            const leavingUserId = myId;
+            if (leavingRoomId && leavingUserId) {
+                try {
+                    await remove(ref(db, `rooms/${leavingRoomId}/participants/${leavingUserId}`));
+                    await remove(ref(db, `rooms/${leavingRoomId}/previews/${leavingUserId}`));
+                    await deleteRoomIfEmpty(leavingRoomId);
+                } catch (_) {}
+            }
+            roomId = null;
+            myId = null;
+            if (showLobby) {
+                setInCall(false);
+                roomChip.classList.remove("on");
+                await stopShare();
+                fxPanel.classList.remove("on");
+                stopAllMedia();
+                micOn = true;
+                camOn = true;
+                sharing = false;
+                localTile.classList.remove("cam-off", "sharing");
+                nameInput.value = storeGet(USER_KEY);
+                refreshUserPreview();
+            }
+        }
+    </script>
+</body>
+</html>
+
