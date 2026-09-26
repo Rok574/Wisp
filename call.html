@@ -63,18 +63,20 @@
         }
         .live.on { display: flex; }
         .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
-        #netBadge {
+        .net-tag {
             font-size: 10px;
             font-weight: 800;
             letter-spacing: .4px;
             text-transform: uppercase;
-            padding: 3px 7px;
+            padding: 2px 6px;
             border-radius: 999px;
             background: rgba(61,214,140,.16);
             color: var(--green);
+            margin-left: 6px;
         }
-        #netBadge.relay { background: rgba(109,124,255,.18); color: #9aa8ff; }
-        #netBadge.cell { background: rgba(242,63,66,.16); color: #ff8b8d; }
+        .net-tag:empty { display: none; }
+        .net-tag.relay { background: rgba(109,124,255,.18); color: #9aa8ff; }
+        .net-tag.cell { background: rgba(242,63,66,.16); color: #ff8b8d; }
         .copy, .gear {
             border: 0; background: rgba(255,255,255,.08); color: #fff;
             border-radius: 999px; padding: 6px 11px; font-weight: 650; font-size: 12px;
@@ -372,9 +374,7 @@
         }
         @keyframes spin { to { transform: rotate(360deg); } }
         .cam-off-badge .ava { width: 72px; height: 72px; font-size: 26px; }
-        .tile .label,
-        .tile .tile-btns,
-        .tile .micdot { display: none !important; }
+        .tile .tile-btns { display: none !important; }
         .label {
             position: absolute; left: 12px; bottom: 12px;
             font-size: 13px; font-weight: 700;
@@ -623,7 +623,6 @@
         <div id="roomChip" class="live">
             <span class="dot"></span>
             <span id="roomLabel">room</span>
-            <span id="netBadge">LAN</span>
             <button id="copyBtn" class="copy" type="button">Copy</button>
         </div>
     </div>
@@ -664,7 +663,7 @@
                     <div class="ava" id="localAva">Y</div>
                     Camera off
                 </div>
-                <div class="label"><span class="micdot" id="localMicDot"></span><span id="localName">You</span></div>
+                <div class="label"><span class="micdot" id="localMicDot"></span><span id="localName">You</span><span class="net-tag" id="localNetTag"></span></div>
                 <div class="tile-btns">
                     <button id="fitBtn" type="button">Fit</button>
                 </div>
@@ -754,40 +753,30 @@
         function sameLan(info) {
             return !!(info && info.net && myNetHash && info.net === myNetHash);
         }
-        function refreshNetBadge() {
-            const el = document.getElementById("netBadge");
+        function setNetTag(el, kind) {
             if (!el) return;
-            if (onCellular()) {
-                el.textContent = "Cellular";
-                el.className = "cell";
-                return;
-            }
+            if (!kind) { el.textContent = ""; el.className = "net-tag"; return; }
+            el.textContent = kind;
+            el.className = "net-tag" + (kind === "Relay" ? " relay" : kind === "Cellular" ? " cell" : "");
+        }
+        function refreshNetBadge() {
+            const localTag = document.getElementById("localNetTag");
             const remotes = [...document.querySelectorAll(".tile.remote")];
             if (!remotes.length) {
-                el.textContent = "LAN";
-                el.className = "";
+                setNetTag(localTag, "");
                 return;
             }
-            const hashes = [];
             remotes.forEach(t => {
-                const id = t.id.replace(/^tile-/, "");
-                const p = peers.get(id);
+                const tag = t.querySelector(".net-tag");
+                const kind = onCellular() ? "Cellular" : (t.classList.contains("same-net") ? "LAN" : "Relay");
+                setNetTag(tag, kind);
             });
-            let lan = 0, other = 0;
-            document.querySelectorAll(".tile.remote").forEach(t => {
-                if (t.classList.contains("same-net")) lan++;
-                else other++;
-            });
-            if (other && lan) {
-                el.textContent = "Mixed";
-                el.className = "relay";
-            } else if (other) {
-                el.textContent = "Relay";
-                el.className = "relay";
-            } else {
-                el.textContent = "LAN";
-                el.className = "";
-            }
+            const lan = remotes.filter(t => t.classList.contains("same-net")).length;
+            const other = remotes.length - lan;
+            if (onCellular()) setNetTag(localTag, "Cellular");
+            else if (other && lan) setNetTag(localTag, "Mixed");
+            else if (other) setNetTag(localTag, "Relay");
+            else setNetTag(localTag, "LAN");
         }
         function schoolOn() {
             return false;
@@ -1572,11 +1561,11 @@
                     entry.bad = (entry.bad || 0) + 1;
                     setPeerWait(id, true, "Reconnecting");
                     try { entry.pc.restartIce(); } catch (_) {}
-                    if (entry.bad >= 2) {
-                        await rebuildPeer(id, {}, entry.bad >= 3);
+                    if (entry.bad >= 3) {
+                        await rebuildPeer(id, {}, false);
                     }
                 } else if (st === "closed") {
-                    await rebuildPeer(id, {}, true);
+                    await rebuildPeer(id, {}, false);
                 } else if (st === "connected" || st === "connecting") {
                     if (document.getElementById("tile-" + id)?.classList.contains("cam-off")) {
                         entry.bad = 0;
@@ -1596,7 +1585,7 @@
                         entry.lastBytes = bytes;
                         if (entry.bad >= 4) {
                             setPeerWait(id, true, "Reconnecting");
-                            await rebuildPeer(id, {}, true);
+                            await rebuildPeer(id, {}, false);
                         } else if (entry.bad === 0) {
                             setPeerWait(id, false);
                         }
@@ -1605,7 +1594,9 @@
             }
         }
         async function startMedia() {
-            if (localStream && !sharing) return localStream;
+            const live = cameraStream?.getVideoTracks?.().some(t => t.readyState === "live")
+                || localStream?.getVideoTracks?.().some(t => t.readyState === "live");
+            if (localStream && !sharing && live) return localStream;
             cameraStream = await getMedia();
             localStream = cameraStream;
             try {
@@ -1656,11 +1647,13 @@
             }
             if (camOn) {
                 try {
-                    if (!cameraStream || cameraStream.getVideoTracks().every(t => t.readyState !== "live")) {
-                        cameraStream = await getMedia(facing);
-                    } else {
-                        cameraStream.getVideoTracks().forEach(t => t.enabled = true);
+                    if (fxStream) {
+                        fxStream.getTracks().forEach(t => t.stop());
+                        fxStream = null;
                     }
+                    FX_W = 0;
+                    FX_H = 0;
+                    cameraStream = await getMedia(facing);
                     fxSrc.srcObject = cameraStream;
                     await fxSrc.play();
                     await startFxPipeline();
@@ -1812,7 +1805,7 @@
             if (!id) throw new Error("Invalid room code");
             await leaveRoom(false);
             roomId = id;
-            myId = clientId();
+            myId = clientId() + "_" + Date.now().toString(36);
             setInCall(true);
             roomChip.classList.add("on");
             roomLabel.textContent = roomId;
@@ -1822,6 +1815,16 @@
             try { await onDisconnect(meRef).remove(); } catch (_) {}
             try { await onDisconnect(ref(db, `rooms/${roomId}/previews/${myId}`)).remove(); } catch (_) {}
             await publishState();
+            try {
+                const stem = clientId() + "_";
+                onValue(ref(db, `rooms/${roomId}/participants`), snap => {
+                    snap.forEach(ch => {
+                        if (ch.key !== myId && String(ch.key).startsWith(stem)) {
+                            remove(ref(db, `rooms/${roomId}/participants/${ch.key}`));
+                        }
+                    });
+                }, { onlyOnce: true });
+            } catch (_) {}
             window.addEventListener("pagehide", onPageHide);
             window.addEventListener("beforeunload", onPageHide);
             window.addEventListener("online", recoverPeers);
@@ -2016,8 +2019,10 @@
             dot.className = "micdot";
             const nameEl = document.createElement("span");
             nameEl.setAttribute("data-name", "");
+            const netTag = document.createElement("span");
+            netTag.className = "net-tag";
             nameEl.textContent = info.name || remoteId.slice(0, 6);
-            label.append(dot, nameEl);
+            label.append(dot, nameEl, netTag);
             const btns = document.createElement("div");
             btns.className = "tile-btns";
             const muteThem = document.createElement("button");
