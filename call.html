@@ -142,16 +142,50 @@
             min-height: 0;
             min-width: 0;
             border: 1px solid var(--line);
+            cursor: pointer;
         }
+        .tile.focused { cursor: zoom-out; border-color: rgba(109,124,255,.45); }
+        #videos.focus {
+            grid-template-columns: 1fr !important;
+            grid-template-rows: 1fr;
+        }
+        #videos.focus > .tile { display: none; }
+        #videos.focus > .tile.focused {
+            display: block;
+            position: relative !important;
+            width: auto !important;
+            height: auto !important;
+            right: auto !important;
+            bottom: auto !important;
+            min-height: 0;
+            z-index: 1;
+            box-shadow: none;
+        }
+        #videos.focus > .tile.local:not(.focused) {
+            display: block;
+            position: absolute !important;
+            width: min(160px, 34vw) !important;
+            height: 100px !important;
+            right: 16px !important;
+            bottom: var(--bar-space) !important;
+            z-index: 6;
+            border-radius: 14px;
+            box-shadow: 0 12px 32px rgba(0,0,0,.45);
+        }
+        #videos.focus > .tile.focused.sharing video,
+        #videos.focus > .tile.focused.fit video { object-fit: contain; }
         video {
+            position: absolute;
+            inset: 0;
             width: 100%;
             height: 100%;
-            object-fit: contain;
+            object-fit: cover;
             object-position: center;
             background: #0a0c11;
             display: block;
         }
-        .tile.fill video { object-fit: cover; }
+        .tile.fit video { object-fit: contain; }
+        .tile.sharing video { object-fit: contain; }
         .tile.local video { transform: scaleX(-1); }
         .tile.local.back-camera video,
         .tile.local.sharing video { transform: none; }
@@ -379,7 +413,7 @@
         let micOn = true;
         let camOn = true;
         let sharing = false;
-        let fillMode = storeGet(FIT_KEY) === "1";
+        let fillMode = storeGet(FIT_KEY) !== "0";
         const peers = new Map();
         let participantsUnsub = null;
         let removedUnsub = null;
@@ -416,7 +450,11 @@
                 .toUpperCase();
         }
         function applyFitMode() {
-            document.querySelectorAll(".tile").forEach(t => t.classList.toggle("fill", fillMode && !t.classList.contains("sharing")));
+            document.querySelectorAll(".tile").forEach(t => {
+                const useFit = t.classList.contains("sharing") || !fillMode;
+                t.classList.toggle("fit", useFit);
+                t.classList.toggle("fill", !useFit);
+            });
             fitBtn.textContent = fillMode ? "Fill" : "Fit";
         }
         function syncCameraMirror() {
@@ -426,13 +464,45 @@
             localTile.classList.toggle("sharing", sharing);
         }
         async function playVideo(el) { try { await el.play(); } catch (_) {} }
+        let focusedTileId = null;
+        function setFocusedTile(tile) {
+            const id = tile?.id || null;
+            if (focusedTileId && focusedTileId === id) tile = null;
+            document.querySelectorAll(".tile.focused").forEach(t => t.classList.remove("focused"));
+            if (!tile || videosEl.children.length <= 1) {
+                focusedTileId = null;
+                videosEl.classList.remove("focus");
+                layout();
+                return;
+            }
+            tile.classList.add("focused");
+            focusedTileId = tile.id;
+            videosEl.classList.add("focus");
+            layout();
+            const v = tile.querySelector("video");
+            if (v) playVideo(v);
+        }
+        function bindTileFocus(tile) {
+            tile.addEventListener("click", (e) => {
+                if (e.target.closest("button")) return;
+                setFocusedTile(tile);
+            });
+        }
         function layout() {
             const n = videosEl.children.length;
+            const keepFocus = videosEl.classList.contains("focus");
             videosEl.className = videosEl.className
                 .replace(/count-\d+/g, "")
                 .replace(/\bone\b/g, "")
+                .replace(/\bfocus\b/g, "")
                 .trim() + " count-" + n;
             if (n <= 1) videosEl.classList.add("one");
+            if (keepFocus && focusedTileId && document.getElementById(focusedTileId)) {
+                videosEl.classList.add("focus");
+            } else if (n <= 1) {
+                focusedTileId = null;
+                document.querySelectorAll(".tile.focused").forEach(t => t.classList.remove("focused"));
+            }
             applyFitMode();
         }
         function cleanUsername(raw) {
@@ -446,26 +516,43 @@
         nameInput.value = storeGet(USER_KEY);
         refreshUserPreview();
         applyFitMode();
+        bindTileFocus(localTile);
+        document.addEventListener("keydown", (e) => {
+            if (e.key === "Escape" && focusedTileId) setFocusedTile(null);
+        });
         nameInput.addEventListener("input", () => {
             const name = cleanUsername(nameInput.value);
             if (name) storeSet(USER_KEY, name);
             refreshUserPreview();
         });
+        async function attachLocal(stream) {
+            localVideo.srcObject = null;
+            localVideo.srcObject = stream;
+            localVideo.muted = true;
+            localVideo.setAttribute("playsinline", "");
+            localVideo.setAttribute("webkit-playsinline", "");
+            await new Promise(resolve => {
+                if (localVideo.readyState >= 2) return resolve();
+                const done = () => {
+                    localVideo.removeEventListener("loadedmetadata", done);
+                    localVideo.removeEventListener("canplay", done);
+                    resolve();
+                };
+                localVideo.addEventListener("loadedmetadata", done);
+                localVideo.addEventListener("canplay", done);
+                setTimeout(resolve, 800);
+            });
+            await playVideo(localVideo);
+        }
         async function getMedia(face = facing) {
             if (!navigator.mediaDevices?.getUserMedia) {
                 throw new Error("Need HTTPS for camera on iPhone/iPad");
             }
+            const audio = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
             const tries = [
-                {
-                    video: {
-                        facingMode: { ideal: face },
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 },
-                        aspectRatio: { ideal: 16 / 9 }
-                    },
-                    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-                },
-                { video: { facingMode: { ideal: face } }, audio: { echoCancellation: true, noiseSuppression: true } },
+                { video: { facingMode: { exact: face } }, audio },
+                { video: { facingMode: { ideal: face } }, audio },
+                { video: { facingMode: face }, audio },
                 { video: true, audio: true }
             ];
             let last;
@@ -523,10 +610,8 @@
             if (localStream && !sharing) return localStream;
             cameraStream = await getMedia();
             localStream = cameraStream;
-            localVideo.srcObject = localStream;
-            localVideo.muted = true;
+            await attachLocal(localStream);
             syncCameraMirror();
-            await playVideo(localVideo);
             applyLocalMediaState();
             return localStream;
         }
@@ -568,13 +653,15 @@
         flipBtn.onclick = async () => {
             if (sharing) return;
             const nextFacing = facing === "user" ? "environment" : "user";
+            flipBtn.disabled = true;
             try {
                 const next = await getMedia(nextFacing);
                 const old = cameraStream;
                 cameraStream = next;
                 localStream = next;
-                facing = next.getVideoTracks()[0]?.getSettings?.().facingMode || nextFacing;
-                localVideo.srcObject = localStream;
+                const settings = next.getVideoTracks()[0]?.getSettings?.() || {};
+                facing = settings.facingMode || nextFacing;
+                await attachLocal(localStream);
                 syncCameraMirror();
                 applyLocalMediaState();
                 const vt = localStream.getVideoTracks()[0];
@@ -583,6 +670,7 @@
                 await replaceOutgoingAudio(at);
                 if (old && old !== next) old.getTracks().forEach(t => t.stop());
             } catch (e) { log("Flip failed"); }
+            flipBtn.disabled = sharing;
         };
         shareBtn.onclick = () => toggleShare();
         async function toggleShare() {
@@ -782,6 +870,7 @@
             };
             btns.appendChild(muteThem);
             tile.append(v, sharePill, badge, label, btns);
+            bindTileFocus(tile);
             videosEl.appendChild(tile);
             layout();
             playVideo(v);
@@ -848,8 +937,10 @@
             entry.unsubscribers.forEach(fn => { try { fn(); } catch (_) {} });
             try { entry.pc.close(); } catch (_) {}
             peers.delete(remoteId);
-            document.getElementById("tile-" + remoteId)?.remove();
-            layout();
+            const gone = "tile-" + remoteId;
+            document.getElementById(gone)?.remove();
+            if (focusedTileId === gone) setFocusedTile(null);
+            else layout();
         }
         function onPageHide() {
             if (roomId && myId) {
