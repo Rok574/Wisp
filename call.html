@@ -238,8 +238,10 @@
             z-index: 1;
             filter: saturate(.85);
         }
-        .tile.waiting .tile-snap[src],
-        .tile.snap-on .tile-snap[src] { display: block; }
+        .tile.waiting .tile-snap[src] { display: block; }
+        .tile.cam-off .tile-snap,
+        .tile.cam-off.waiting .tile-snap { display: none !important; }
+        .tile.cam-off.waiting .tile-wait { display: none; }
         .spin {
             width: 28px; height: 28px; border-radius: 50%;
             border: 3px solid rgba(255,255,255,.2);
@@ -856,7 +858,7 @@
         }
         function mapLmToCanvas(lm, sw, sh, cw, ch) {
             if (!lm || !sw || !sh) return lm;
-            const scale = Math.max(cw / sw, ch / sh);
+            const scale = Math.min(cw / sw, ch / sh);
             const ox = (cw - sw * scale) / 2;
             const oy = (ch - sh * scale) / 2;
             return lm.map(p => ({
@@ -1074,7 +1076,7 @@
             const sw = src.videoWidth || src.width || cw;
             const sh = src.videoHeight || src.height || ch;
             if (!sw || !sh) return;
-            const scale = Math.max(cw / sw, ch / sh);
+            const scale = Math.min(cw / sw, ch / sh);
             const dw = sw * scale;
             const dh = sh * scale;
             ctx.drawImage(src, (cw - dw) / 2, (ch - dh) / 2, dw, dh);
@@ -1235,7 +1237,7 @@
         function applyPreview(id, data) {
             if (!id || id === myId) return;
             const tile = document.getElementById("tile-" + id);
-            if (!tile || !data?.img) return;
+            if (!tile || !data?.img || tile.classList.contains("cam-off")) return;
             let img = tile.querySelector(".tile-snap");
             if (!img) {
                 img = document.createElement("img");
@@ -1244,10 +1246,14 @@
                 tile.insertBefore(img, tile.firstChild.nextSibling);
             }
             img.src = data.img;
-            tile.classList.add("snap-on");
         }
         async function publishPreviewFrame() {
-            if (!roomId || !myId || sharing || !camOn) return;
+            if (!roomId || !myId || sharing || !camOn) {
+                if (roomId && myId && !camOn) {
+                    try { await remove(ref(db, `rooms/${roomId}/previews/${myId}`)); } catch (_) {}
+                }
+                return;
+            }
             try {
                 previewCanvas.width = 160;
                 previewCanvas.height = 90;
@@ -1286,18 +1292,28 @@
             tile.classList.toggle("waiting", !!on);
             const label = tile.querySelector("[data-wait]");
             if (label && text) label.textContent = text;
+            if (!on) tile.classList.remove("snap-on");
         }
         async function recoverPeers() {
             if (!roomId || !localStream) return;
             for (const [id, entry] of peers.entries()) {
                 const st = entry.pc?.connectionState;
-                if (st === "disconnected" || st === "failed") {
-                    setPeerWait(id, true, "Reconnecting");
+                if (st === "failed") {
+                    entry.bad = (entry.bad || 0) + 1;
+                    if (entry.bad >= 2) {
+                        setPeerWait(id, true, "Reconnecting");
+                        publishPreviewFrame();
+                    }
                     try { entry.pc.restartIce(); } catch (_) {}
                 } else if (st === "closed") {
                     peers.delete(id);
                     await ensurePeer(id, myId < id, false, {});
-                } else {
+                } else if (st === "connected" || st === "connecting") {
+                    if (document.getElementById("tile-" + id)?.classList.contains("cam-off")) {
+                        entry.bad = 0;
+                        setPeerWait(id, false);
+                        continue;
+                    }
                     try {
                         const stats = await entry.pc.getStats();
                         let bytes = 0;
@@ -1306,13 +1322,15 @@
                                 bytes += r.bytesReceived || 0;
                             }
                         });
-                        const now = Date.now();
-                        if (entry.lastStats && now - entry.lastStats > 2500) {
-                            if (bytes === entry.lastBytes) setPeerWait(id, true, "Unstable connection");
-                            else setPeerWait(id, false);
-                        }
+                        if (bytes === entry.lastBytes) entry.bad = (entry.bad || 0) + 1;
+                        else entry.bad = 0;
                         entry.lastBytes = bytes;
-                        entry.lastStats = now;
+                        if (entry.bad >= 4) {
+                            setPeerWait(id, true, "Reconnecting");
+                            publishPreviewFrame();
+                        } else if (entry.bad === 0) {
+                            setPeerWait(id, false);
+                        }
                     } catch (_) {}
                 }
             }
@@ -1361,6 +1379,9 @@
             if (sharing) return;
             camOn = !camOn;
             applyLocalMediaState();
+            if (!camOn && roomId && myId) {
+                try { remove(ref(db, `rooms/${roomId}/previews/${myId}`)); } catch (_) {}
+            }
             if (camOn) {
                 try {
                     if (!cameraStream || cameraStream.getVideoTracks().every(t => t.readyState !== "live")) {
@@ -1550,8 +1571,6 @@
             heartbeatTimer = setInterval(() => { publishState(); }, 8000);
             pruneTimer = setInterval(() => { pruneStaleParticipants(); }, 10000);
             reconnectTimer = setInterval(() => { recoverPeers(); }, 5000);
-            previewTimer = setInterval(() => { publishPreviewFrame(); }, 2000);
-            publishPreviewFrame();
             if (previewUnsub) { try { previewUnsub(); } catch (_) {} }
             previewUnsub = onValue(ref(db, `rooms/${roomId}/previews`), snap => {
                 if (!snap.exists()) return;
@@ -1578,6 +1597,11 @@
             if (dot) dot.classList.toggle("off", info.micOn === false);
             tile.classList.toggle("cam-off", info.camOn === false && !info.sharing);
             tile.classList.toggle("sharing", !!info.sharing);
+            if (info.camOn === false) {
+                tile.classList.remove("waiting");
+                const snap = tile.querySelector(".tile-snap");
+                if (snap) snap.removeAttribute("src");
+            }
             paintAva(tile.querySelector(".cam-off-badge .ava"), n);
             applyFitMode();
         }
@@ -1649,10 +1673,8 @@
             v.setAttribute("webkit-playsinline", "");
             v.srcObject = remoteStream;
             v.addEventListener("loadedmetadata", () => playVideo(v));
-            v.addEventListener("canplay", () => { playVideo(v); setPeerWait(remoteId, false); });
-            v.addEventListener("playing", () => setPeerWait(remoteId, false));
-            v.addEventListener("waiting", () => setPeerWait(remoteId, true, "Loading"));
-            v.addEventListener("stalled", () => setPeerWait(remoteId, true, "Reconnecting"));
+            v.addEventListener("canplay", () => playVideo(v));
+            v.addEventListener("playing", () => { playVideo(v); setPeerWait(remoteId, false); });
             const badge = document.createElement("div");
             badge.className = "cam-off-badge";
             const av = document.createElement("div");
@@ -1697,7 +1719,6 @@
             layout();
             }
             v.srcObject = remoteStream;
-            setPeerWait(remoteId, true, "Connecting");
             playVideo(v);
             updateRemoteChrome(remoteId, info);
             pc.ontrack = (ev) => {
@@ -1728,20 +1749,10 @@
             pc.onconnectionstatechange = () => {
                 log((info.name || remoteId.slice(0, 6)) + ": " + pc.connectionState);
                 if (pc.connectionState === "connected") setPeerWait(remoteId, false);
-                if (pc.connectionState === "connecting" || pc.connectionState === "disconnected") {
+                if (pc.connectionState === "failed") {
                     setPeerWait(remoteId, true, "Reconnecting");
-                }
-                if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
+                    publishPreviewFrame();
                     try { pc.restartIce(); } catch (_) {}
-                    setTimeout(() => {
-                        const entry = peers.get(remoteId);
-                        if (!entry || entry.pc !== pc) return;
-                        if (pc.connectionState === "connected") {
-                            setPeerWait(remoteId, false);
-                            return;
-                        }
-                        try { pc.restartIce(); } catch (_) {}
-                    }, 2500);
                 }
             };
             if (!relayOnly) {
