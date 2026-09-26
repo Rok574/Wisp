@@ -376,6 +376,7 @@
         .cam-off-badge .ava { width: 72px; height: 72px; font-size: 26px; }
         .tile .tile-btns { display: none !important; }
         .tile.local .label { display: none !important; }
+        .tile .micdot { display: none !important; }
         .tile .label ~ .label { display: none !important; }
         .label {
             position: absolute; left: 12px; bottom: 12px;
@@ -814,20 +815,9 @@
             return myNetHash;
         }
         function iceForCall(forceRelay, info) {
-            if (schoolOn() || (!forceRelay && sameLan(info) && !onCellular())) {
-                return {
-                    iceServers: [{ urls: [
-                        "stun:stun.l.google.com:19302",
-                        "stun:stun1.l.google.com:19302"
-                    ]}],
-                    iceTransportPolicy: "all",
-                    iceCandidatePoolSize: 0
-                };
-            }
-            const relay = forceRelay || onCellular();
             return {
                 iceServers: iceConfig.iceServers,
-                iceTransportPolicy: relay ? "relay" : "all",
+                iceTransportPolicy: forceRelay ? "relay" : "all",
                 iceCandidatePoolSize: 2
             };
         }
@@ -1832,8 +1822,15 @@
             participantsUnsub = onChildAdded(partsRef, async (snap) => {
                 const remoteId = snap.key;
                 if (!remoteId || remoteId === myId) return;
+                const info = snap.val() || {};
+                document.querySelectorAll(".tile.remote").forEach(t => {
+                    const id = t.id.replace(/^tile-/, "");
+                    if (id === remoteId) return;
+                    const n = (t.querySelector("[data-name]")?.textContent || "").replace(/ muted$/, "");
+                    if (info.name && n === info.name) teardownPeer(id);
+                });
                 teardownPeer(remoteId);
-                await ensurePeer(remoteId, myId < remoteId, false, snap.val() || {});
+                await ensurePeer(remoteId, myId < remoteId, false, info);
             });
             removedUnsub = onChildRemoved(partsRef, async (snap) => {
                 if (snap.key && snap.key !== myId) teardownPeer(snap.key);
