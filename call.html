@@ -376,6 +376,7 @@
         .cam-off-badge .ava { width: 72px; height: 72px; font-size: 26px; }
         .tile .tile-btns { display: none !important; }
         .tile.local .label { display: none !important; }
+        .tile .label ~ .label { display: none !important; }
         .label {
             position: absolute; left: 12px; bottom: 12px;
             font-size: 13px; font-weight: 700;
@@ -383,8 +384,11 @@
             backdrop-filter: blur(10px);
             padding: 6px 10px; border-radius: 999px;
             display: flex; align-items: center; gap: 7px;
-            max-width: calc(100% - 90px);
+            max-width: min(70%, 220px);
             z-index: 2;
+            pointer-events: none;
+            white-space: nowrap;
+            overflow: hidden;
         }
         .micdot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
         .micdot.off { background: var(--red); }
@@ -768,7 +772,7 @@
             if (!remotes.length) return;
             remotes.forEach(t => {
                 const tag = t.querySelector(".net-tag");
-                const kind = onCellular() ? "Cellular" : (t.classList.contains("same-net") ? "LAN" : "Relay");
+                const kind = t.classList.contains("same-net") ? "LAN" : "Relay";
                 setNetTag(tag, kind);
             });
             const lan = remotes.filter(t => t.classList.contains("same-net")).length;
@@ -1529,6 +1533,8 @@
             }
             await clearPeerSignals(remoteId);
             await ensurePeer(remoteId, myId < remoteId, useRelay, info);
+            const done = peers.get(remoteId);
+            if (done) done.rebuilding = false;
         }
         function setPeerWait(id, on, text) {
             const tile = document.getElementById("tile-" + id);
@@ -1799,6 +1805,7 @@
             await leaveRoom(false);
             roomId = id;
             myId = clientId() + "_" + Date.now().toString(36);
+            callGen += 1;
             setInCall(true);
             roomChip.classList.add("on");
             roomLabel.textContent = roomId;
@@ -1825,7 +1832,8 @@
             participantsUnsub = onChildAdded(partsRef, async (snap) => {
                 const remoteId = snap.key;
                 if (!remoteId || remoteId === myId) return;
-                await ensurePeer(remoteId, myId < remoteId, false, snap.val());
+                teardownPeer(remoteId);
+                await ensurePeer(remoteId, myId < remoteId, false, snap.val() || {});
             });
             removedUnsub = onChildRemoved(partsRef, async (snap) => {
                 if (snap.key && snap.key !== myId) teardownPeer(snap.key);
@@ -1965,7 +1973,11 @@
             const existing = peers.get(remoteId);
             if (existing) {
                 const st = existing.pc.connectionState;
-                if (st !== "failed" && st !== "closed") {
+                if (st === "connected") {
+                    attachLocalTracks(existing.pc);
+                    return;
+                }
+                if (st === "connecting" || st === "new") {
                     attachLocalTracks(existing.pc);
                     return;
                 }
@@ -2082,8 +2094,8 @@
                     }, 3000);
                 }
             };
-            if (!relayOnly && !sameLan(info)) {
-                const wait = onCellular() ? 3500 : 10000;
+            if (!relayOnly) {
+                const wait = sameLan(info) ? 5000 : (onCellular() ? 3500 : 8000);
                 setTimeout(async () => {
                     const entry = peers.get(remoteId);
                     if (!entry || entry.pc !== pc) return;
