@@ -1,1 +1,20 @@
-SEE_FILE
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Wisp - chat</title>
+</head>
+<body>
+<p style="font-family:sans-serif;padding:24px;color:#53576e">Loading Wisp…</p>
+<script>
+fetch('https://cdn.jsdelivr.net/gh/Rok574/Wisp@5d828538b200049e15dcbf0cd39df3696902ff8d/index.html')
+  .then(function(r){ if(!r.ok) throw new Error('Could not load app'); return r.text(); })
+  .then(function(html){ document.open(); document.write(html); document.close(); })
+  .catch(function(err){
+    document.body.innerHTML = '<p style="font-family:sans-serif;padding:24px">Could not load Wisp. Open the previous working commit and restore index.html.</p>';
+    console.error(err);
+  });
+</script>
+</body>
+</html>
