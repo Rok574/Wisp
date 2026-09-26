@@ -120,7 +120,7 @@
             position: relative;
             min-height: 0;
         }
-        body.in-call #stage { display: block; }
+        body.in-call #stage { display: block; height: 100%; min-height: 0; }
         #videos {
             height: 100%;
             display: grid;
@@ -201,6 +201,7 @@
         }
         .tile.fit video { object-fit: contain; }
         .tile.sharing video { object-fit: contain; }
+        .tile.local:not(.sharing) video { object-fit: cover !important; }
         .tile.local video { transform: scaleX(-1); }
         .tile.local.back-camera video,
         .tile.local.sharing video { transform: none; }
@@ -313,7 +314,7 @@
         }
         .fx-grid {
             display: grid;
-            grid-template-columns: repeat(5, 1fr);
+            grid-template-columns: repeat(4, 1fr);
             gap: 8px;
         }
         .fx-item {
@@ -328,7 +329,15 @@
         }
         .fx-item.on { border-color: var(--accent); background: #262a3d; }
         .fx-ico { font-size: 22px; display: block; margin-bottom: 4px; }
-        #fxSrc, #fxCanvas { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+        #fxSrc, #fxCanvas {
+            position: fixed;
+            left: -10000px;
+            top: 0;
+            width: 1280px;
+            height: 720px;
+            opacity: 0;
+            pointer-events: none;
+        }
         .log { display: none; }
         @media (min-width: 760px) {
             .bar button { width: 52px; height: 52px; }
@@ -495,10 +504,9 @@
         <h3>Effects</h3>
         <div class="fx-grid">
             <button class="fx-item on" data-fx="off" type="button"><span class="fx-ico">🚫</span>None</button>
-            <button class="fx-item" data-fx="blur" type="button"><span class="fx-ico">🫧</span>Blur</button>
             <button class="fx-item" data-fx="glasses" type="button"><span class="fx-ico">🤓</span>Glasses</button>
             <button class="fx-item" data-fx="ears" type="button"><span class="fx-ico">🐱</span>Cat ears</button>
-            <button class="fx-item" data-fx="party" type="button"><span class="fx-ico">🎉</span>Both</button>
+            <button class="fx-item" data-fx="party" type="button"><span class="fx-ico">😻</span>Glasses + ears</button>
         </div>
     </div>
     <video id="fxSrc" autoplay muted playsinline webkit-playsinline></video>
@@ -507,7 +515,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
         import {
-            getDatabase, ref, set, push, onValue, onChildAdded, onChildRemoved, remove, runTransaction
+            getDatabase, ref, set, push, onValue, onChildAdded, onChildRemoved, remove, runTransaction, onDisconnect
         } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js";
         const firebaseConfig = {
             apiKey: "AIzaSyCjbcnSZc5uEcbEqgn68H-CLx2MoMpuqgA",
@@ -523,6 +531,8 @@
         const db = getDatabase(app);
         const USER_KEY = "wisprtc.username";
         const FIT_KEY = "wisprtc.fill";
+        const CLIENT_KEY = "wisprtc.clientId";
+        const STALE_MS = 70000;
         const COLORS = ["#6d7cff","#3dd68c","#f5c542","#eb459e","#f23f42","#00a8fc","#f26522","#b57bff"];
         const EXTRA_TURN = [];
         const iceConfig = {
@@ -598,6 +608,10 @@
         const peers = new Map();
         let participantsUnsub = null;
         let removedUnsub = null;
+        let partsValueUnsub = null;
+        let heartbeatTimer = null;
+        let pruneTimer = null;
+        let reconnectTimer = null;
         function storeGet(key) {
             try { return localStorage.getItem(key) || ""; } catch (_) { return ""; }
         }
@@ -696,7 +710,28 @@
             }
             applyFitMode();
         }
-        window.addEventListener("resize", () => { if (document.body.classList.contains("in-call")) layout(); });
+        let rotateTimer = 0;
+        async function afterRotate() {
+            layout();
+            videosEl.querySelectorAll("video").forEach(playVideo);
+            try { await fxSrc.play(); } catch (_) {}
+            try { await localVideo.play(); } catch (_) {}
+            if (fxMode !== "off" && !sharing && cameraStream) {
+                fxLastLm = null;
+                await startFxPipeline();
+                await pushLocalOutput();
+            }
+        }
+        window.addEventListener("resize", () => {
+            if (!document.body.classList.contains("in-call")) return;
+            layout();
+            clearTimeout(rotateTimer);
+            rotateTimer = setTimeout(afterRotate, 280);
+        });
+        window.addEventListener("orientationchange", () => {
+            clearTimeout(rotateTimer);
+            rotateTimer = setTimeout(afterRotate, 350);
+        });
         function cleanUsername(raw) {
             return String(raw || "").replace(/\s+/g, " ").trim().slice(0, 20);
         }
@@ -779,6 +814,17 @@
         function lmPt(lm, i, w, h) {
             return { x: lm[i].x * w, y: lm[i].y * h };
         }
+        function mapLmToCanvas(lm, sw, sh, cw, ch) {
+            if (!lm || !sw || !sh) return lm;
+            const scale = Math.max(cw / sw, ch / sh);
+            const ox = (cw - sw * scale) / 2;
+            const oy = (ch - sh * scale) / 2;
+            return lm.map(p => ({
+                x: (p.x * sw * scale + ox) / cw,
+                y: (p.y * sh * scale + oy) / ch,
+                z: p.z
+            }));
+        }
         function lerpLm(lm) {
             if (!fxLastLm || fxLastLm.length !== lm.length) {
                 fxLastLm = lm.map(p => ({ x: p.x, y: p.y, z: p.z }));
@@ -792,23 +838,38 @@
             return fxLastLm;
         }
         function drawCatEar(ctx, tip, baseL, baseR, inner) {
+            ctx.save();
             ctx.beginPath();
-            ctx.moveTo(tip.x, tip.y);
-            ctx.lineTo(baseL.x, baseL.y);
-            ctx.lineTo(baseR.x, baseR.y);
+            ctx.moveTo(baseL.x, baseL.y);
+            ctx.quadraticCurveTo(tip.x + (baseL.x - baseR.x) * 0.08, tip.y, tip.x, tip.y);
+            ctx.quadraticCurveTo(tip.x + (baseR.x - baseL.x) * 0.08, tip.y, baseR.x, baseR.y);
             ctx.closePath();
-            ctx.fillStyle = "#1a1a1a";
+            ctx.fillStyle = "#2b1b12";
             ctx.fill();
-            ctx.strokeStyle = "#111";
-            ctx.lineWidth = 2;
+            ctx.strokeStyle = "#120c08";
+            ctx.lineWidth = 2.2;
             ctx.stroke();
             ctx.beginPath();
-            ctx.moveTo(inner.tip.x, inner.tip.y);
-            ctx.lineTo(inner.l.x, inner.l.y);
+            ctx.moveTo(inner.l.x, inner.l.y);
+            ctx.quadraticCurveTo(inner.tip.x, inner.tip.y, inner.tip.x, inner.tip.y);
             ctx.lineTo(inner.r.x, inner.r.y);
             ctx.closePath();
-            ctx.fillStyle = "#ff7aa2";
+            ctx.fillStyle = "#ff8fb3";
             ctx.fill();
+            ctx.beginPath();
+            ctx.fillStyle = "rgba(255,255,255,.22)";
+            ctx.moveTo(
+                (baseL.x * 0.55 + tip.x * 0.45),
+                (baseL.y * 0.55 + tip.y * 0.45)
+            );
+            ctx.lineTo(tip.x, tip.y);
+            ctx.lineTo(
+                (baseL.x * 0.72 + tip.x * 0.28),
+                (baseL.y * 0.72 + tip.y * 0.28)
+            );
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
         }
         function drawGlasses(ctx, lm, w, h) {
             const lOuter = lmPt(lm, 33, w, h);
@@ -850,33 +911,46 @@
         }
         function drawEars(ctx, lm, w, h) {
             const top = lmPt(lm, 10, w, h);
+            const crown = lm[151] ? lmPt(lm, 151, w, h) : top;
             const chin = lmPt(lm, 152, w, h);
-            const lTemple = lmPt(lm, 127, w, h);
-            const rTemple = lmPt(lm, 356, w, h);
-            const upx = top.x - chin.x;
-            const upy = top.y - chin.y;
+            const lBrow = lm[67] ? lmPt(lm, 67, w, h) : lmPt(lm, 127, w, h);
+            const rBrow = lm[297] ? lmPt(lm, 297, w, h) : lmPt(lm, 356, w, h);
+            const upx = crown.x - chin.x;
+            const upy = crown.y - chin.y;
             const ulen = Math.hypot(upx, upy) || 1;
             const ux = upx / ulen, uy = upy / ulen;
             const px = -uy, py = ux;
-            const earH = ulen * 0.42;
-            const earW = ulen * 0.22;
+            const earH = ulen * 0.38;
+            const earW = ulen * 0.16;
             function ear(anchor, dir) {
                 const base = {
-                    x: anchor.x + ux * ulen * 0.08 + px * dir * ulen * 0.18,
-                    y: anchor.y + uy * ulen * 0.08 + py * dir * ulen * 0.18
+                    x: anchor.x + ux * ulen * 0.22 + px * dir * ulen * 0.16,
+                    y: anchor.y + uy * ulen * 0.22 + py * dir * ulen * 0.16
                 };
-                const tip = { x: base.x + ux * earH + px * dir * earW * 0.35, y: base.y + uy * earH + py * dir * earW * 0.35 };
-                const bL = { x: base.x + px * dir * -earW, y: base.y + py * dir * -earW };
-                const bR = { x: base.x + px * dir * earW * 0.35, y: base.y + py * dir * earW * 0.35 };
+                const tip = {
+                    x: base.x + ux * earH + px * dir * earW * 0.55,
+                    y: base.y + uy * earH + py * dir * earW * 0.55
+                };
+                const innerEdge = { x: base.x - px * dir * earW, y: base.y - py * dir * earW };
+                const outerEdge = { x: base.x + px * dir * earW * 0.85, y: base.y + py * dir * earW * 0.85 };
                 const inner = {
-                    tip: { x: base.x + ux * earH * 0.62 + px * dir * earW * 0.15, y: base.y + uy * earH * 0.62 + py * dir * earW * 0.15 },
-                    l: { x: base.x + ux * 8 + px * dir * -earW * 0.35, y: base.y + uy * 8 + py * dir * -earW * 0.35 },
-                    r: { x: base.x + ux * 8 + px * dir * earW * 0.12, y: base.y + uy * 8 + py * dir * earW * 0.12 }
+                    tip: {
+                        x: base.x + ux * earH * 0.62 + px * dir * earW * 0.28,
+                        y: base.y + uy * earH * 0.62 + py * dir * earW * 0.28
+                    },
+                    l: {
+                        x: base.x + ux * earW * 0.25 - px * dir * earW * 0.42,
+                        y: base.y + uy * earW * 0.25 - py * dir * earW * 0.42
+                    },
+                    r: {
+                        x: base.x + ux * earW * 0.25 + px * dir * earW * 0.38,
+                        y: base.y + uy * earW * 0.25 + py * dir * earW * 0.38
+                    }
                 };
-                drawCatEar(ctx, tip, bL, bR, inner);
+                drawCatEar(ctx, tip, innerEdge, outerEdge, inner);
             }
-            ear(lTemple, -1);
-            ear(rTemple, 1);
+            ear(lBrow, -1);
+            ear(rBrow, 1);
         }
         function blurFaceExcept(ctx, w, h, lm) {
             const small = document.createElement("canvas");
@@ -903,63 +977,117 @@
             ctx.drawImage(fxSrc, 0, 0, w, h);
             ctx.restore();
         }
+        function fakeLandmarks(w, h) {
+            const cx = 0.5, cy = 0.45, fw = 0.22, fh = 0.28;
+            const pts = Array.from({ length: 478 }, () => ({ x: cx, y: cy, z: 0 }));
+            pts[33] = { x: cx - fw * 0.55, y: cy - fh * 0.05, z: 0 };
+            pts[133] = { x: cx - fw * 0.18, y: cy - fh * 0.05, z: 0 };
+            pts[362] = { x: cx + fw * 0.18, y: cy - fh * 0.05, z: 0 };
+            pts[263] = { x: cx + fw * 0.55, y: cy - fh * 0.05, z: 0 };
+            pts[168] = { x: cx, y: cy - fh * 0.12, z: 0 };
+            pts[10] = { x: cx, y: cy - fh * 0.7, z: 0 };
+            pts[152] = { x: cx, y: cy + fh * 0.75, z: 0 };
+            pts[127] = { x: cx - fw * 0.85, y: cy - fh * 0.15, z: 0 };
+            pts[356] = { x: cx + fw * 0.85, y: cy - fh * 0.15, z: 0 };
+            pts[234] = { x: cx - fw, y: cy, z: 0 };
+            pts[454] = { x: cx + fw, y: cy, z: 0 };
+            return pts;
+        }
         async function loadFaceModel() {
             if (fxLandmarker) return fxLandmarker;
-            const { FaceLandmarker, FilesetResolver } = await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm");
-            const files = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
-            fxLandmarker = await FaceLandmarker.createFromOptions(files, {
-                baseOptions: {
-                    modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
-                    delegate: "GPU"
-                },
-                runningMode: "VIDEO",
-                numFaces: 1
-            });
-            fxReady = true;
-            return fxLandmarker;
+            const cdn = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+            const model = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
+            const vision = await import(cdn);
+            const { FaceLandmarker, FilesetResolver } = vision;
+            const files = await FilesetResolver.forVisionTasks(cdn + "/wasm");
+            let lastErr;
+            for (const delegate of ["GPU", "CPU"]) {
+                try {
+                    fxLandmarker = await FaceLandmarker.createFromOptions(files, {
+                        baseOptions: { modelAssetPath: model, delegate },
+                        runningMode: "VIDEO",
+                        numFaces: 1
+                    });
+                    fxReady = true;
+                    log("Effects ready (" + delegate + ")");
+                    return fxLandmarker;
+                } catch (e) { lastErr = e; }
+            }
+            throw lastErr || new Error("Face model failed");
         }
         function stopFxLoop() {
             if (fxRaf) cancelAnimationFrame(fxRaf);
             fxRaf = 0;
+        }
+        function paintFx(lm, w, h) {
+            if (fxMode === "glasses" || fxMode === "party") drawGlasses(fxCtx, lm, w, h);
+            if (fxMode === "ears" || fxMode === "party") drawEars(fxCtx, lm, w, h);
+        }
+        async function waitVideoSize(el, ms = 1500) {
+            const start = performance.now();
+            while (performance.now() - start < ms) {
+                if (el.videoWidth >= 160 && el.videoHeight >= 160) return;
+                await new Promise(r => setTimeout(r, 50));
+            }
+        }
+        function drawCover(ctx, src, cw, ch) {
+            const sw = src.videoWidth || src.width || cw;
+            const sh = src.videoHeight || src.height || ch;
+            if (!sw || !sh) return;
+            const scale = Math.max(cw / sw, ch / sh);
+            const dw = sw * scale;
+            const dh = sh * scale;
+            ctx.drawImage(src, (cw - dw) / 2, (ch - dh) / 2, dw, dh);
         }
         function fxTick() {
             if (!fxActive()) {
                 stopFxLoop();
                 return;
             }
-            const src = fxSrc;
-            const w = src.videoWidth || 640;
-            const h = src.videoHeight || 480;
-            if (fxCanvas.width !== w) fxCanvas.width = w;
-            if (fxCanvas.height !== h) fxCanvas.height = h;
+            const cw = fxCanvas.width;
+            const ch = fxCanvas.height;
             fxCtx.setTransform(1, 0, 0, 1, 0, 0);
             fxCtx.filter = "none";
-            fxCtx.drawImage(src, 0, 0, w, h);
-            if (fxLandmarker && src.readyState >= 2) {
+            fxCtx.fillStyle = "#0a0c11";
+            fxCtx.fillRect(0, 0, cw, ch);
+            try { drawCover(fxCtx, fxSrc, cw, ch); } catch (_) {}
+            let used = null;
+            if (fxLandmarker && fxSrc.readyState >= 2) {
                 try {
-                    const res = fxLandmarker.detectForVideo(src, performance.now());
-                    const raw = res?.faceLandmarks?.[0];
-                    if (raw) {
-                        const lm = lerpLm(raw);
-                        if (fxMode === "blur" || fxMode === "party") blurFaceExcept(fxCtx, w, h, lm);
-                        if (fxMode === "glasses" || fxMode === "party") drawGlasses(fxCtx, lm, w, h);
-                        if (fxMode === "ears" || fxMode === "party") drawEars(fxCtx, lm, w, h);
+                    const res = fxLandmarker.detectForVideo(fxSrc, performance.now());
+                    if (res?.faceLandmarks?.[0]) {
+                        const sw = fxSrc.videoWidth || cw;
+                        const sh = fxSrc.videoHeight || ch;
+                        used = lerpLm(mapLmToCanvas(res.faceLandmarks[0], sw, sh, cw, ch));
                     }
                 } catch (_) {}
             }
+            paintFx(used || fxLastLm || fakeLandmarks(cw, ch), cw, ch);
             fxRaf = requestAnimationFrame(fxTick);
         }
         async function startFxPipeline() {
             if (!cameraStream) return;
-            fxSrc.srcObject = cameraStream;
+            fxSrc.setAttribute("playsinline", "");
             fxSrc.muted = true;
+            fxSrc.srcObject = cameraStream;
             try { await fxSrc.play(); } catch (_) {}
-            if (!fxStream) fxStream = fxCanvas.captureStream(24);
-            const camTrack = cameraStream.getVideoTracks()[0];
-            if (camTrack && fxStream.getVideoTracks()[0]) {
-                const settings = camTrack.getSettings?.() || {};
-                try { fxCanvas.width = settings.width || fxSrc.videoWidth || 640; } catch (_) {}
+            await waitVideoSize(fxSrc);
+            const settings = cameraStream.getVideoTracks()[0]?.getSettings?.() || {};
+            if (fxStream && fxStream.getVideoTracks().every(t => t.readyState !== "live")) {
+                fxStream = null;
             }
+            if (!fxStream) {
+                const w = fxSrc.videoWidth || settings.width || 960;
+                const h = fxSrc.videoHeight || settings.height || 1280;
+                fxCanvas.width = w;
+                fxCanvas.height = h;
+                fxCanvas.style.width = w + "px";
+                fxCanvas.style.height = h + "px";
+                drawCover(fxCtx, fxSrc, w, h);
+                fxStream = fxCanvas.captureStream(30);
+            }
+            const out = fxStream.getVideoTracks()[0];
+            if (out) out.enabled = true;
             stopFxLoop();
             fxTick();
         }
@@ -1007,12 +1135,14 @@
                 return;
             }
             try {
-                await loadFaceModel();
+                try { await loadFaceModel(); }
+                catch (err) { log("Face tracker fallback"); }
                 await startFxPipeline();
                 await pushLocalOutput();
             } catch (err) {
-                log("Effects need a newer browser");
-                alert("Face effects could not start. Try Chrome or Edge on HTTPS.");
+                console.error(err);
+                log("Effects failed");
+                alert("Effects could not start. Use HTTPS in Chrome or Edge.");
                 fxMode = "off";
             }
         });
@@ -1037,9 +1167,60 @@
             if (!roomId || !myId) return;
             try {
                 await set(ref(db, `rooms/${roomId}/participants/${myId}`), {
-                    name: displayName, micOn, camOn, sharing, joinedAt: Date.now()
+                    name: displayName, micOn, camOn, sharing,
+                    joinedAt: Date.now(),
+                    seenAt: Date.now()
                 });
             } catch (_) {}
+        }
+        function clientId() {
+            let id = storeGet(CLIENT_KEY);
+            if (!id) {
+                id = uid() + Date.now().toString(36).slice(-4);
+                storeSet(CLIENT_KEY, id);
+            }
+            return id;
+        }
+        function stopPresenceTimers() {
+            clearInterval(heartbeatTimer);
+            clearInterval(pruneTimer);
+            clearInterval(reconnectTimer);
+            heartbeatTimer = pruneTimer = reconnectTimer = null;
+        }
+        async function pruneStaleParticipants() {
+            if (!roomId) return;
+            try {
+                const snapWait = await new Promise(resolve => {
+                    const off = onValue(ref(db, `rooms/${roomId}/participants`), s => {
+                        off();
+                        resolve(s);
+                    }, { onlyOnce: true });
+                });
+                if (!snapWait.exists()) return;
+                const now = Date.now();
+                snapWait.forEach(child => {
+                    const info = child.val() || {};
+                    const last = info.seenAt || info.joinedAt || 0;
+                    if (child.key !== myId && last && now - last > STALE_MS) {
+                        remove(ref(db, `rooms/${roomId}/participants/${child.key}`));
+                        teardownPeer(child.key);
+                    }
+                });
+            } catch (_) {}
+        }
+        async function recoverPeers() {
+            if (!roomId || !localStream) return;
+            for (const [id, entry] of peers.entries()) {
+                const st = entry.pc?.connectionState;
+                if (st === "failed" || st === "disconnected" || st === "closed") {
+                    try { entry.pc.restartIce(); } catch (_) {}
+                    if (st === "failed" || st === "closed") {
+                        const info = {};
+                        teardownPeer(id);
+                        await ensurePeer(id, myId < id, false, info);
+                    }
+                }
+            }
         }
         async function startMedia() {
             if (localStream && !sharing) return localStream;
@@ -1226,14 +1407,18 @@
             if (!id) throw new Error("Invalid room code");
             await leaveRoom(false);
             roomId = id;
-            myId = uid() + Date.now().toString(36).slice(-3);
+            myId = clientId();
             setInCall(true);
             roomChip.classList.add("on");
             roomLabel.textContent = roomId;
             log("In room " + roomId);
+            const meRef = ref(db, `rooms/${roomId}/participants/${myId}`);
+            try { await onDisconnect(meRef).remove(); } catch (_) {}
             await publishState();
             window.addEventListener("pagehide", onPageHide);
             window.addEventListener("beforeunload", onPageHide);
+            window.addEventListener("online", recoverPeers);
+            document.addEventListener("visibilitychange", onVisible);
             const partsRef = ref(db, `rooms/${roomId}/participants`);
             participantsUnsub = onChildAdded(partsRef, async (snap) => {
                 const remoteId = snap.key;
@@ -1244,16 +1429,35 @@
                 if (snap.key && snap.key !== myId) teardownPeer(snap.key);
                 await deleteRoomIfEmpty(roomId);
             });
-            onValue(partsRef, (snap) => {
+            partsValueUnsub = onValue(partsRef, (snap) => {
                 if (!snap.exists()) {
                     deleteRoomIfEmpty(roomId);
                     return;
                 }
+                const now = Date.now();
                 snap.forEach(child => {
                     if (child.key === myId) return;
-                    if (peers.get(child.key)) updateRemoteChrome(child.key, child.val() || {});
+                    const info = child.val() || {};
+                    const last = info.seenAt || info.joinedAt || 0;
+                    if (last && now - last > STALE_MS) {
+                        remove(ref(db, `rooms/${roomId}/participants/${child.key}`));
+                        teardownPeer(child.key);
+                        return;
+                    }
+                    updateRemoteChrome(child.key, info);
+                    ensurePeer(child.key, myId < child.key, false, info);
                 });
             });
+            stopPresenceTimers();
+            heartbeatTimer = setInterval(() => { publishState(); }, 8000);
+            pruneTimer = setInterval(() => { pruneStaleParticipants(); }, 10000);
+            reconnectTimer = setInterval(() => { recoverPeers(); }, 5000);
+        }
+        function onVisible() {
+            if (document.visibilityState === "visible") {
+                publishState();
+                recoverPeers();
+            }
         }
         function signalPath(a, b, leaf, relayOnly = false) {
             const [x, y] = a < b ? [a, b] : [b, a];
@@ -1297,8 +1501,8 @@
                     const n = Math.max(1, peers.size);
                     const params = s.getParameters();
                     params.encodings = params.encodings?.length ? params.encodings : [{}];
-                    params.encodings[0].maxBitrate = n >= 6 ? 180000 : n >= 4 ? 280000 : 600000;
-                    params.encodings[0].scaleResolutionDownBy = n >= 6 ? 3 : n >= 4 ? 2 : 1;
+                    params.encodings[0].maxBitrate = n >= 8 ? 250000 : 900000;
+                    params.encodings[0].scaleResolutionDownBy = 1;
                     await s.setParameters(params);
                 } catch (_) {}
             });
@@ -1400,7 +1604,16 @@
             };
             pc.onconnectionstatechange = () => {
                 log((info.name || remoteId.slice(0, 6)) + ": " + pc.connectionState);
-                if (pc.connectionState === "failed") try { pc.restartIce(); } catch (_) {}
+                if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
+                    try { pc.restartIce(); } catch (_) {}
+                    setTimeout(() => {
+                        const entry = peers.get(remoteId);
+                        if (!entry || entry.pc !== pc) return;
+                        if (pc.connectionState === "connected") return;
+                        teardownPeer(remoteId);
+                        ensurePeer(remoteId, iAmOfferer, true, info);
+                    }, 2500);
+                }
             };
             if (!relayOnly) {
                 const wait = 12000 + Math.floor(Math.random() * 4000);
@@ -1460,8 +1673,12 @@
         async function leaveRoom(showLobby) {
             window.removeEventListener("pagehide", onPageHide);
             window.removeEventListener("beforeunload", onPageHide);
+            window.removeEventListener("online", recoverPeers);
+            document.removeEventListener("visibilitychange", onVisible);
+            stopPresenceTimers();
             if (participantsUnsub) { try { participantsUnsub(); } catch (_) {} participantsUnsub = null; }
             if (removedUnsub) { try { removedUnsub(); } catch (_) {} removedUnsub = null; }
+            if (partsValueUnsub) { try { partsValueUnsub(); } catch (_) {} partsValueUnsub = null; }
             [...peers.keys()].forEach(teardownPeer);
             const leavingRoomId = roomId;
             const leavingUserId = myId;
