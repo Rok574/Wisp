@@ -1638,12 +1638,20 @@
                     }
                     FX_W = 0;
                     FX_H = 0;
+                    const oldCam = cameraStream;
                     cameraStream = await getMedia(facing);
+                    if (oldCam && oldCam !== cameraStream) oldCam.getTracks().forEach(t => t.stop());
                     fxSrc.srcObject = cameraStream;
                     await fxSrc.play();
                     await startFxPipeline();
+                    localVideo.srcObject = null;
                     await pushLocalOutput();
-                } catch (_) {}
+                    localTile.classList.remove("cam-off");
+                    await playVideo(localVideo);
+                } catch (err) {
+                    log("Camera failed");
+                    alert("Could not turn the camera back on.");
+                }
             }
         };
         fitBtn.onclick = () => {
@@ -2127,6 +2135,21 @@
         function onPageHide() {
             if (roomId && myId) publishState();
         }
+        function stopAllMedia() {
+            stopFxLoop();
+            try { fxStream?.getTracks().forEach(t => t.stop()); } catch (_) {}
+            try { localStream?.getTracks().forEach(t => t.stop()); } catch (_) {}
+            try { cameraStream?.getTracks().forEach(t => t.stop()); } catch (_) {}
+            try { screenStream?.getTracks().forEach(t => t.stop()); } catch (_) {}
+            fxStream = null;
+            localStream = null;
+            cameraStream = null;
+            screenStream = null;
+            FX_W = 0;
+            FX_H = 0;
+            localVideo.srcObject = null;
+            fxSrc.srcObject = null;
+        }
         async function leaveRoom(showLobby) {
             window.removeEventListener("pagehide", onPageHide);
             window.removeEventListener("beforeunload", onPageHide);
@@ -2153,24 +2176,14 @@
                 setInCall(false);
                 roomChip.classList.remove("on");
                 await stopShare();
-                stopFxLoop();
                 fxPanel.classList.remove("on");
-                if (localStream) {
-                    localStream.getTracks().forEach(t => t.stop());
-                    localStream = null;
-                }
-                if (cameraStream) {
-                    cameraStream.getTracks().forEach(t => t.stop());
-                    cameraStream = null;
-                }
-                localVideo.srcObject = null;
+                stopAllMedia();
                 micOn = true;
                 camOn = true;
                 sharing = false;
                 localTile.classList.remove("cam-off", "sharing");
                 nameInput.value = storeGet(USER_KEY);
                 refreshUserPreview();
-                applyLocalMediaState();
             }
         }
     </script>
