@@ -375,6 +375,7 @@
         @keyframes spin { to { transform: rotate(360deg); } }
         .cam-off-badge .ava { width: 72px; height: 72px; font-size: 26px; }
         .tile .tile-btns { display: none !important; }
+        .tile.local .label { display: none !important; }
         .label {
             position: absolute; left: 12px; bottom: 12px;
             font-size: 13px; font-weight: 700;
@@ -711,7 +712,7 @@
         const SCHOOL_KEY = "wisprtc.school";
         const FIT_KEY = "wisprtc.fill";
         const CLIENT_KEY = "wisprtc.clientId";
-        const STALE_MS = 70000;
+        const STALE_MS = 720000;
         const COLORS = ["#6d7cff","#3dd68c","#f5c542","#eb459e","#f23f42","#00a8fc","#f26522","#b57bff"];
         const EXTRA_TURN = [];
         const iceConfig = {
@@ -762,10 +763,8 @@
         function refreshNetBadge() {
             const localTag = document.getElementById("localNetTag");
             const remotes = [...document.querySelectorAll(".tile.remote")];
-            if (!remotes.length) {
-                setNetTag(localTag, "");
-                return;
-            }
+            setNetTag(localTag, "");
+            if (!remotes.length) return;
             remotes.forEach(t => {
                 const tag = t.querySelector(".net-tag");
                 const kind = onCellular() ? "Cellular" : (t.classList.contains("same-net") ? "LAN" : "Relay");
@@ -773,10 +772,7 @@
             });
             const lan = remotes.filter(t => t.classList.contains("same-net")).length;
             const other = remotes.length - lan;
-            if (onCellular()) setNetTag(localTag, "Cellular");
-            else if (other && lan) setNetTag(localTag, "Mixed");
-            else if (other) setNetTag(localTag, "Relay");
-            else setNetTag(localTag, "LAN");
+            setNetTag(localTag, "");
         }
         function schoolOn() {
             return false;
@@ -1401,29 +1397,18 @@
             fxPanel.querySelectorAll(".fx-item").forEach(b => b.classList.toggle("on", b === btn));
             fxBtn.classList.toggle("on", fxMode !== "off" || fxPanel.classList.contains("on"));
             if (sharing) return;
-            if (fxMode === "off") {
-                stopFxLoop();
-                fxLastLm = null;
-                if (cameraStream) {
-                    localStream = cameraStream;
-                    await attachLocal(localStream);
-                    const vt = cameraStream.getVideoTracks()[0];
-                    const at = cameraStream.getAudioTracks()[0];
-                    if (vt) await replaceOutgoingVideo(vt);
-                    if (at) await replaceOutgoingAudio(at);
-                }
-                return;
+            fxLastLm = null;
+            if (fxMode !== "off") {
+                try { await loadFaceModel(); } catch (_) {}
             }
-            try {
-                try { await loadFaceModel(); }
-                catch (err) { log("Face tracker fallback"); }
-                await startFxPipeline();
-                await pushLocalOutput();
-            } catch (err) {
-                console.error(err);
-                log("Effects failed");
-                alert("Effects could not start. Use HTTPS in Chrome or Edge.");
-                fxMode = "off";
+            if (!fxStream || fxStream.getVideoTracks().every(t => t.readyState !== "live")) {
+                try {
+                    await startFxPipeline();
+                    await pushLocalOutput();
+                } catch (err) {
+                    console.error(err);
+                    log("Effects failed");
+                }
             }
         });
         function applyLocalMediaState() {
@@ -1812,7 +1797,6 @@
             refreshNetBadge();
             log("In room " + roomId);
             const meRef = ref(db, `rooms/${roomId}/participants/${myId}`);
-            try { await onDisconnect(meRef).remove(); } catch (_) {}
             try { await onDisconnect(ref(db, `rooms/${roomId}/previews/${myId}`)).remove(); } catch (_) {}
             await publishState();
             try {
@@ -1876,10 +1860,15 @@
             });
         }
         function onVisible() {
-            if (document.visibilityState === "visible") {
+            if (document.visibilityState !== "visible") return;
+            if (!roomId || !myId) return;
+            publishState();
+            videosEl.querySelectorAll("video").forEach(playVideo);
+            recoverPeers();
+            setTimeout(() => {
                 publishState();
                 recoverPeers();
-            }
+            }, 800);
         }
         async function reconnectAfterNetwork() {
             if (!roomId || !myId) return;
