@@ -247,7 +247,8 @@
             <label for="nameInput">Username</label>
             <input id="nameInput" type="text" placeholder="cooluser" maxlength="20" autocomplete="username" autocapitalize="off">
             <label for="roomInput">Room code</label>
-            <input id="roomInput" type="text" inputmode="text" autocomplete="off" autocapitalize="none" placeholder="leave empty to create one">
+            <input id="roomInput" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="32" placeholder="Custom code (optional)">
+            <div style="margin-top:7px;color:var(--dim);font-size:12px;">Enter any code to create or join that room.</div>
             <div class="actions">
                 <button class="go" id="joinBtn" type="button">Join</button>
                 <button class="ghost" id="createBtn" type="button">New room</button>
@@ -283,7 +284,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
         import {
-            getDatabase, ref, set, push, onValue, onChildAdded, onChildRemoved, remove
+            getDatabase, ref, set, push, onValue, onChildAdded, onChildRemoved, remove, runTransaction
         } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js";
 
         const firebaseConfig = {
@@ -385,7 +386,17 @@
             el.style.background = colorFor(name || "?");
         }
         function log(t) { statusLog.textContent = t; console.log(t); }
-        function uid() { return Math.random().toString(36).slice(2, 8); }
+        function uid() {
+            return Math.random().toString(36).slice(2, 8).toUpperCase();
+        }
+
+        function cleanRoomCode(raw) {
+            return String(raw || "")
+                .replace(/[^a-zA-Z0-9_-]/g, "")
+                .trim()
+                .slice(0, 32)
+                .toUpperCase();
+        }
         async function playVideo(el) { try { await el.play(); } catch (_) {} }
         function layout() {
             const n = videosEl.children.length;
@@ -466,6 +477,22 @@
             await enter();
         };
         document.getElementById("joinBtn").onclick = () => enter();
+
+        roomInput.addEventListener("input", () => {
+            const start = roomInput.selectionStart;
+            const cleaned = cleanRoomCode(roomInput.value);
+            roomInput.value = cleaned;
+            if (start !== null) {
+                try { roomInput.setSelectionRange(cleaned.length, cleaned.length); } catch (_) {}
+            }
+        });
+
+        roomInput.addEventListener("keydown", e => {
+            if (e.key === "Enter") {
+                e.preventDefault();
+                enter();
+            }
+        });
         document.getElementById("copyBtn").onclick = async () => {
             try { await navigator.clipboard.writeText(roomId); } catch (_) {}
             document.getElementById("copyBtn").textContent = "Copied";
@@ -507,7 +534,8 @@
             refreshUserPreview();
             localName.textContent = displayName;
             paintAva(localAva, displayName);
-            const id = roomInput.value.trim() || uid();
+            const typedCode = cleanRoomCode(roomInput.value);
+            const id = typedCode || uid();
             roomInput.value = id;
             try { await startMedia(); }
             catch (err) {
@@ -519,6 +547,18 @@
 
         function setInCall(on) {
             document.body.classList.toggle("in-call", on);
+        }
+
+        async function deleteRoomIfEmpty(id) {
+            if (!id) return;
+            try {
+                await runTransaction(ref(db, `rooms/${id}`), current => {
+                    if (!current) return current;
+                    const participants = current.participants || {};
+                    if (Object.keys(participants).length === 0) return null;
+                    return current;
+                });
+            } catch (_) {}
         }
 
         async function joinRoom(id) {
@@ -539,10 +579,15 @@
                 if (!remoteId || remoteId === myId) return;
                 await ensurePeer(remoteId, myId < remoteId, false, snap.val());
             });
-            removedUnsub = onChildRemoved(partsRef, (snap) => {
+            removedUnsub = onChildRemoved(partsRef, async (snap) => {
                 if (snap.key && snap.key !== myId) teardownPeer(snap.key);
+                await deleteRoomIfEmpty(roomId);
             });
             onValue(partsRef, (snap) => {
+                if (!snap.exists()) {
+                    deleteRoomIfEmpty(roomId);
+                    return;
+                }
                 snap.forEach(child => {
                     if (child.key === myId) return;
                     if (peers.get(child.key)) updateRemoteChrome(child.key, child.val() || {});
@@ -682,7 +727,9 @@
         }
 
         function onPageHide() {
-            if (roomId && myId) remove(ref(db, `rooms/${roomId}/participants/${myId}`));
+            if (roomId && myId) {
+                remove(ref(db, `rooms/${roomId}/participants/${myId}`));
+            }
         }
 
         async function leaveRoom(showLobby) {
@@ -691,8 +738,13 @@
             if (participantsUnsub) { try { participantsUnsub(); } catch (_) {} participantsUnsub = null; }
             if (removedUnsub) { try { removedUnsub(); } catch (_) {} removedUnsub = null; }
             [...peers.keys()].forEach(teardownPeer);
-            if (roomId && myId) {
-                try { await remove(ref(db, `rooms/${roomId}/participants/${myId}`)); } catch (_) {}
+            const leavingRoomId = roomId;
+            const leavingUserId = myId;
+            if (leavingRoomId && leavingUserId) {
+                try {
+                    await remove(ref(db, `rooms/${leavingRoomId}/participants/${leavingUserId}`));
+                    await deleteRoomIfEmpty(leavingRoomId);
+                } catch (_) {}
             }
             roomId = null;
             myId = null;
