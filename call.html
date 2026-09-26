@@ -2,49 +2,114 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebRTC Mobile Call</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>WebRTC Room Call</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #121212; color: white; padding: 15px; margin: 0; text-align: center; }
-        h2 { margin-top: 10px; font-size: 20px; }
-        .video-container { display: flex; flex-direction: column; gap: 10px; align-items: center; margin-top: 15px; }
-        video { width: 90%; max-width: 360px; background: #000; border-radius: 12px; aspect-ratio: 4/3; object-fit: cover; }
-        #localVideo { transform: scaleX(-1); border: 2px solid #333; }
-        #remoteVideo { border: 2px solid #007aff; }
-        .controls { display: flex; flex-direction: column; gap: 10px; max-width: 360px; margin: 0 auto 15px auto; padding: 10px; background: #1e1e1e; border-radius: 12px; }
-        button, input { padding: 12px; font-size: 16px; border-radius: 8px; border: none; width: 100%; box-sizing: border-box; }
-        button { background: #007aff; color: white; font-weight: bold; cursor: pointer; }
-        button:disabled { background: #333; color: #777; cursor: not-allowed; }
-        input { background: #2c2c2e; color: white; text-align: center; }
-        .log-box { font-family: monospace; font-size: 12px; color: #aaa; margin-top: 10px; padding: 5px; max-height: 80px; overflow-y: auto; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        html, body { margin: 0; padding: 0; background: #000; color: #fff; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            min-height: 100dvh;
+            padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+        }
+        h2 { margin: 8px 0 4px; font-size: 20px; text-align: center; font-weight: 650; }
+        .sub { text-align: center; color: #8e8e93; font-size: 13px; margin-bottom: 14px; }
+        .controls {
+            display: flex; flex-direction: column; gap: 8px;
+            max-width: 420px; margin: 0 auto 14px;
+            padding: 12px; background: #1c1c1e; border-radius: 16px;
+        }
+        button, input {
+            padding: 13px 12px; font-size: 16px; border-radius: 12px;
+            border: none; width: 100%;
+        }
+        button {
+            background: #007aff; color: #fff; font-weight: 650; cursor: pointer;
+        }
+        button.secondary { background: #2c2c2e; }
+        button.danger { background: #ff453a; }
+        button:disabled { background: #2c2c2e; color: #636366; cursor: not-allowed; }
+        input { background: #2c2c2e; color: #fff; text-align: center; outline: none; }
+        .row { display: flex; gap: 8px; }
+        .videos {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            max-width: 720px;
+            margin: 0 auto;
+        }
+        .tile {
+            position: relative;
+            background: #111;
+            border-radius: 14px;
+            overflow: hidden;
+            aspect-ratio: 3 / 4;
+        }
+        .tile.local { border: 2px solid #3a3a3c; }
+        .tile.remote { border: 2px solid #007aff; }
+        video {
+            width: 100%; height: 100%; object-fit: cover; background: #000;
+            display: block;
+        }
+        .tile.local video { transform: scaleX(-1); }
+        .label {
+            position: absolute; left: 8px; bottom: 8px;
+            font-size: 11px; background: rgba(0,0,0,.55);
+            padding: 3px 8px; border-radius: 999px;
+        }
+        .log {
+            max-width: 420px; margin: 12px auto 0;
+            font-family: ui-monospace, Menlo, monospace;
+            font-size: 11px; color: #8e8e93;
+            min-height: 48px; max-height: 90px; overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        .warn {
+            max-width: 420px; margin: 0 auto 10px;
+            background: #3a2a00; color: #ffd60a;
+            padding: 8px 10px; border-radius: 10px; font-size: 12px;
+            display: none;
+        }
+        @media (max-width: 520px) {
+            .videos { grid-template-columns: 1fr; }
+            .tile { aspect-ratio: 4 / 3; max-height: 42vh; }
+        }
     </style>
 </head>
 <body>
+    <h2>Group Call</h2>
+    <div class="sub">Multiple people can join the same room ID</div>
+    <div id="httpsWarn" class="warn">iPhone/iPad require HTTPS. Open this page over https:// (not http://) or camera access will fail.</div>
 
-    <h2>Firebase WebRTC Mobile Call</h2>
-    
     <div class="controls">
-        <button id="startBtn">1. Allow Camera & Mic</button>
-        <button id="createBtn" disabled>2. Create New Call</button>
-        <input type="text" id="callIdInput" placeholder="Paste Call ID to Join...">
-        <button id="joinBtn" disabled>3. Join Existing Call</button>
+        <button id="startBtn">1. Allow Camera &amp; Mic</button>
+        <div class="row">
+            <button id="createBtn" class="secondary" disabled>2. Create Room</button>
+            <button id="joinBtn" class="secondary" disabled>3. Join Room</button>
+        </div>
+        <input id="roomInput" type="text" inputmode="text" autocomplete="off" autocapitalize="none" placeholder="Room ID (share this)">
+        <button id="leaveBtn" class="danger" disabled>Leave</button>
     </div>
 
-    <div class="video-container">
-        <video id="localVideo" autoplay playsinline muted></video>
-        <video id="remoteVideo" autoplay playsinline></video>
+    <div id="videos" class="videos">
+        <div class="tile local">
+            <video id="localVideo" autoplay playsinline webkit-playsinline muted></video>
+            <div class="label">You</div>
+        </div>
     </div>
-
-    <div id="statusLog" class="log-box">Status: Waiting for media initialization...</div>
+    <div id="statusLog" class="log">Status: waiting…</div>
 
     <script type="module">
-        import { initializeApp } from "https://gstatic.com";
-        import { getDatabase, ref, set, push, onValue, get } from "https://gstatic.com";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+        import {
+            getDatabase, ref, set, push, onValue, get, onChildAdded, onChildRemoved, remove, off
+        } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyCjbcnSZc5uEcbEqgn68H-CLx2MoMpuqgA",
-            authDomain: "://firebaseapp.com",
-            databaseURL: "https://firebaseio.com",
+            authDomain: "jhghugjh-432da.firebaseapp.com",
+            databaseURL: "https://jhghugjh-432da-default-rtdb.firebaseio.com",
             projectId: "jhghugjh-432da",
             storageBucket: "jhghugjh-432da.firebasestorage.app",
             messagingSenderId: "138235206183",
@@ -55,157 +120,267 @@
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
 
-        // Standard global STUN servers configuration
-        const servers = {
+        const iceConfig = {
             iceServers: [
-                { urls: ['stun:://google.com', 'stun:://google.com'] }
+                { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
+                {
+                    urls: [
+                        "turn:openrelay.metered.ca:80",
+                        "turn:openrelay.metered.ca:443",
+                        "turn:openrelay.metered.ca:443?transport=tcp"
+                    ],
+                    username: "openrelayproject",
+                    credential: "openrelayproject"
+                }
             ],
-            iceCandidatePoolSize: 10,
+            iceCandidatePoolSize: 8
         };
 
-        let pc = new RTCPeerConnection(servers);
-        let localStream = null;
-        let remoteStream = null;
+        const startBtn = document.getElementById("startBtn");
+        const createBtn = document.getElementById("createBtn");
+        const joinBtn = document.getElementById("joinBtn");
+        const leaveBtn = document.getElementById("leaveBtn");
+        const roomInput = document.getElementById("roomInput");
+        const localVideo = document.getElementById("localVideo");
+        const videosEl = document.getElementById("videos");
+        const statusLog = document.getElementById("statusLog");
+        const httpsWarn = document.getElementById("httpsWarn");
 
-        const startBtn = document.getElementById('startBtn');
-        const createBtn = document.getElementById('createBtn');
-        const joinBtn = document.getElementById('joinBtn');
-        const callIdInput = document.getElementById('callIdInput');
-        const localVideo = document.getElementById('localVideo');
-        const remoteVideo = document.getElementById('remoteVideo');
-        const statusLog = document.getElementById('statusLog');
+        if (!window.isSecureContext) httpsWarn.style.display = "block";
+
+        let localStream = null;
+        let myId = null;
+        let roomId = null;
+        const peers = new Map(); // remoteId -> { pc, unsubscribers }
+        let participantsUnsub = null;
 
         function log(text) {
-            statusLog.innerText = `Status: ${text}`;
+            const line = `${new Date().toLocaleTimeString()}  ${text}`;
+            statusLog.textContent = line + "\n" + statusLog.textContent;
             console.log(text);
         }
 
-        // 1. Initializing Camera and Microphone safely for mobile environments
-        startBtn.onclick = async () => {
+        function uid() {
+            return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+        }
+
+        async function playVideo(el) {
+            try { await el.play(); } catch (e) { /* iOS may defer until gesture */ }
+        }
+
+        async function getMediaWithFallback() {
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                alert("WebRTC Media Error: Your mobile browser is blocking camera access because this site isn't using a secure connection (HTTPS). Ensure you deploy via HTTPS.");
-                log("Failed: Insecure context.");
-                return;
+                throw new Error("getUserMedia missing. Use HTTPS on iPhone/iPad.");
             }
+            const attempts = [
+                { video: { facingMode: "user" }, audio: true },
+                { video: true, audio: true },
+                { video: { width: { ideal: 640 }, height: { ideal: 480 } }, audio: true },
+                { video: { facingMode: { ideal: "user" } }, audio: { echoCancellation: true } }
+            ];
+            let last = null;
+            for (const constraints of attempts) {
+                try {
+                    return await navigator.mediaDevices.getUserMedia(constraints);
+                } catch (err) {
+                    last = err;
+                }
+            }
+            throw last || new Error("Could not access camera/mic");
+        }
 
+        startBtn.onclick = async () => {
+            startBtn.disabled = true;
+            log("Requesting camera & mic…");
             try {
-                // Constraints target mobile phone cameras specifically
-                localStream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } }, 
-                    audio: true 
-                });
-                
-                remoteStream = new MediaStream();
-
-                localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-
-                pc.ontrack = (event) => {
-                    event.streams[0].getTracks().forEach(track => {
-                        remoteStream.addTrack(track);
-                    });
-                };
-
+                localStream = await getMediaWithFallback();
+                localVideo.setAttribute("playsinline", "");
+                localVideo.setAttribute("webkit-playsinline", "");
+                localVideo.muted = true;
                 localVideo.srcObject = localStream;
-                remoteVideo.srcObject = remoteStream;
-
-                // Explicitly tell mobile browsers to begin video play cycles
-                localVideo.play().catch(e => console.log("Local playback catch:", e));
-                remoteVideo.play().catch(e => console.log("Remote playback catch:", e));
-
+                await playVideo(localVideo);
                 createBtn.disabled = false;
                 joinBtn.disabled = false;
-                startBtn.disabled = true;
-                log("Camera & microphone linked successfully.");
+                startBtn.textContent = "Camera ready";
+                log("Camera & microphone ready.");
             } catch (err) {
-                alert(`Hardware Permissions Rejected: ${err.message}`);
-                log(`Error acquiring hardware links: ${err.name}`);
+                startBtn.disabled = false;
+                const msg = err && err.message ? err.message : String(err);
+                alert("Camera/mic failed: " + msg + "\n\nOn iPhone/iPad:\n• Page must be HTTPS\n• Allow Camera + Microphone in Safari settings\n• Use the button tap (not auto-start)");
+                log("Media error: " + (err.name || "") + " " + msg);
             }
         };
 
-        // 2. Caller Execution Path
         createBtn.onclick = async () => {
-            log("Generating secure signaling session...");
-            const callsRef = ref(db, 'calls');
-            const newCallRef = push(callsRef);
-            const callId = newCallRef.key;
-            
-            callIdInput.value = callId;
-            log(`Session created! Share this ID: ${callId}`);
-
-            const localCandidatesRef = ref(db, `calls/${callId}/localCandidates`);
-            const remoteCandidatesRef = ref(db, `calls/${callId}/remoteCandidates`);
-
-            pc.onicecandidate = (event) => {
-                if (event.candidate) {
-                    push(localCandidatesRef, event.candidate.toJSON());
-                }
-            };
-
-            const offerDescription = await pc.createOffer();
-            await pc.setLocalDescription(offerDescription);
-
-            const offer = { sdp: offerDescription.sdp, type: offerDescription.type };
-            await set(ref(db, `calls/${callId}/offer`), offer);
-
-            // Await remote answer handshake block
-            onValue(ref(db, `calls/${callId}/answer`), (snapshot) => {
-                const data = snapshot.val();
-                if (!pc.currentRemoteDescription && data) {
-                    log("Peer answered! Negotiating connection lines...");
-                    const answerDescription = new RTCSessionDescription(data);
-                    pc.setRemoteDescription(answerDescription);
-                }
-            });
-
-            onValue(remoteCandidatesRef, (snapshot) => {
-                snapshot.forEach((childSnapshot) => {
-                    const data = childSnapshot.val();
-                    pc.addIceCandidate(new RTCIceCandidate(data)).catch(e => {});
-                });
-            });
-
-            pc.onconnectionstatechange = () => log(`Connection State: ${pc.connectionState}`);
+            if (!localStream) return;
+            roomInput.value = uid().slice(0, 6);
+            await joinRoom(roomInput.value.trim());
         };
 
-        // 3. Receiver Execution Path
         joinBtn.onclick = async () => {
-            const callId = callIdInput.value.trim();
-            if (!callId) return alert("Please enter an active Call ID channel code first!");
-
-            log(`Connecting to session reference path: ${callId}...`);
-            const localCandidatesRef = ref(db, `calls/${callId}/localCandidates`);
-            const remoteCandidatesRef = ref(db, `calls/${callId}/remoteCandidates`);
-
-            pc.onicecandidate = (event) => {
-                if (event.candidate) {
-                    push(remoteCandidatesRef, event.candidate.toJSON());
-                }
-            };
-
-            const offerSnapshot = await get(ref(db, `calls/${callId}/offer`));
-            if (!offerSnapshot.exists()) {
-                alert("Invalid Call ID! Channel resource not found.");
+            const id = roomInput.value.trim();
+            if (!id) {
+                alert("Enter a Room ID first, or tap Create Room.");
                 return;
             }
-            
-            const offerDescription = offerSnapshot.val();
-            await pc.setRemoteDescription(new RTCSessionDescription(offerDescription));
-
-            const answerDescription = await pc.createAnswer();
-            await pc.setLocalDescription(answerDescription);
-
-            const answer = { type: answerDescription.type, sdp: answerDescription.sdp };
-            await set(ref(db, `calls/${callId}/answer`), answer);
-
-            onValue(localCandidatesRef, (snapshot) => {
-                snapshot.forEach((childSnapshot) => {
-                    const data = childSnapshot.val();
-                    pc.addIceCandidate(new RTCIceCandidate(data)).catch(e => {});
-                });
-            });
-
-            pc.onconnectionstatechange = () => log(`Connection State: ${pc.connectionState}`);
+            await joinRoom(id);
         };
+
+        leaveBtn.onclick = () => leaveRoom();
+
+        async function joinRoom(id) {
+            if (!localStream) {
+                alert("Allow camera & mic first.");
+                return;
+            }
+            await leaveRoom(false);
+            roomId = id;
+            myId = uid();
+            roomInput.value = roomId;
+            createBtn.disabled = true;
+            joinBtn.disabled = true;
+            leaveBtn.disabled = false;
+            log("Joining room " + roomId + " as " + myId);
+
+            const meRef = ref(db, `rooms/${roomId}/participants/${myId}`);
+            await set(meRef, { joinedAt: Date.now() });
+
+            window.addEventListener("pagehide", onPageHide);
+            window.addEventListener("beforeunload", onPageHide);
+
+            const partsRef = ref(db, `rooms/${roomId}/participants`);
+            participantsUnsub = onChildAdded(partsRef, async (snap) => {
+                const remoteId = snap.key;
+                if (!remoteId || remoteId === myId) return;
+                log("Peer joined: " + remoteId);
+                await ensurePeer(remoteId, myId < remoteId);
+            });
+            onChildRemoved(partsRef, (snap) => {
+                const remoteId = snap.key;
+                if (remoteId && remoteId !== myId) teardownPeer(remoteId);
+            });
+        }
+
+        function signalPath(a, b, leaf) {
+            const [x, y] = a < b ? [a, b] : [b, a];
+            return `rooms/${roomId}/signals/${x}_${y}/${leaf}`;
+        }
+
+        async function ensurePeer(remoteId, iAmOfferer) {
+            if (peers.has(remoteId) || !localStream || !roomId) return;
+
+            const pc = new RTCPeerConnection(iceConfig);
+            const unsubscribers = [];
+            peers.set(remoteId, { pc, unsubscribers });
+
+            localStream.getTracks().forEach((t) => pc.addTrack(t, localStream));
+
+            const remoteStream = new MediaStream();
+            const tile = document.createElement("div");
+            tile.className = "tile remote";
+            tile.id = "tile-" + remoteId;
+            const v = document.createElement("video");
+            v.autoplay = true;
+            v.playsInline = true;
+            v.setAttribute("playsinline", "");
+            v.setAttribute("webkit-playsinline", "");
+            v.srcObject = remoteStream;
+            const label = document.createElement("div");
+            label.className = "label";
+            label.textContent = remoteId.slice(0, 6);
+            tile.appendChild(v);
+            tile.appendChild(label);
+            videosEl.appendChild(tile);
+            playVideo(v);
+
+            pc.ontrack = (ev) => {
+                ev.streams[0].getTracks().forEach((t) => {
+                    if (!remoteStream.getTracks().some((x) => x.id === t.id)) remoteStream.addTrack(t);
+                });
+                v.srcObject = remoteStream;
+                playVideo(v);
+            };
+
+            pc.onconnectionstatechange = () => {
+                log(remoteId.slice(0, 6) + ": " + pc.connectionState);
+                if (pc.connectionState === "failed") {
+                    pc.restartIce();
+                }
+            };
+
+            const candRef = ref(db, signalPath(myId, remoteId, "candidates/" + myId));
+            pc.onicecandidate = (ev) => {
+                if (ev.candidate) push(candRef, ev.candidate.toJSON());
+            };
+
+            const theirCandRef = ref(db, signalPath(myId, remoteId, "candidates/" + remoteId));
+            unsubscribers.push(onChildAdded(theirCandRef, (snap) => {
+                const data = snap.val();
+                if (data) pc.addIceCandidate(new RTCIceCandidate(data)).catch(() => {});
+            }));
+
+            const offerRef = ref(db, signalPath(myId, remoteId, "offer"));
+            const answerRef = ref(db, signalPath(myId, remoteId, "answer"));
+
+            if (iAmOfferer) {
+                const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
+                await pc.setLocalDescription(offer);
+                await set(offerRef, { type: offer.type, sdp: offer.sdp });
+                unsubscribers.push(onValue(answerRef, async (snap) => {
+                    const data = snap.val();
+                    if (data && !pc.currentRemoteDescription) {
+                        await pc.setRemoteDescription(new RTCSessionDescription(data));
+                    }
+                }));
+            } else {
+                unsubscribers.push(onValue(offerRef, async (snap) => {
+                    const data = snap.val();
+                    if (!data || pc.currentRemoteDescription) return;
+                    await pc.setRemoteDescription(new RTCSessionDescription(data));
+                    const answer = await pc.createAnswer();
+                    await pc.setLocalDescription(answer);
+                    await set(answerRef, { type: answer.type, sdp: answer.sdp });
+                }));
+            }
+        }
+
+        function teardownPeer(remoteId) {
+            const entry = peers.get(remoteId);
+            if (!entry) return;
+            entry.unsubscribers.forEach((fn) => { try { fn(); } catch (_) {} });
+            try { entry.pc.close(); } catch (_) {}
+            peers.delete(remoteId);
+            const tile = document.getElementById("tile-" + remoteId);
+            if (tile) tile.remove();
+            log("Peer left: " + remoteId);
+        }
+
+        function onPageHide() {
+            if (roomId && myId) {
+                remove(ref(db, `rooms/${roomId}/participants/${myId}`));
+            }
+        }
+
+        async function leaveRoom(resetButtons = true) {
+            window.removeEventListener("pagehide", onPageHide);
+            window.removeEventListener("beforeunload", onPageHide);
+            if (participantsUnsub) {
+                try { participantsUnsub(); } catch (_) {}
+                participantsUnsub = null;
+            }
+            [...peers.keys()].forEach(teardownPeer);
+            if (roomId && myId) {
+                try { await remove(ref(db, `rooms/${roomId}/participants/${myId}`)); } catch (_) {}
+            }
+            roomId = null;
+            myId = null;
+            if (resetButtons && localStream) {
+                createBtn.disabled = false;
+                joinBtn.disabled = false;
+                leaveBtn.disabled = true;
+                log("Left room.");
+            }
+        }
     </script>
 </body>
 </html>
