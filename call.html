@@ -63,6 +63,18 @@
         }
         .live.on { display: flex; }
         .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+        #netBadge {
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: .4px;
+            text-transform: uppercase;
+            padding: 3px 7px;
+            border-radius: 999px;
+            background: rgba(61,214,140,.16);
+            color: var(--green);
+        }
+        #netBadge.relay { background: rgba(109,124,255,.18); color: #9aa8ff; }
+        #netBadge.cell { background: rgba(242,63,66,.16); color: #ff8b8d; }
         .copy, .gear {
             border: 0; background: rgba(255,255,255,.08); color: #fff;
             border-radius: 999px; padding: 6px 11px; font-weight: 650; font-size: 12px;
@@ -292,14 +304,14 @@
             inset: 0;
             width: 100%;
             height: 100%;
-            object-fit: cover !important;
+            object-fit: contain !important;
             object-position: center;
             background: #0a0c11;
             display: block;
         }
         .tile.fit video { object-fit: contain !important; }
         .tile.sharing video { object-fit: contain !important; }
-        .tile:not(.sharing):not(.fit) video { object-fit: cover !important; }
+        .tile video { object-fit: contain !important; }
         .tile.local video { transform: scaleX(-1); }
         .tile.remote.front-cam video { transform: scaleX(-1); }
         .tile.local.back-camera video,
@@ -611,14 +623,9 @@
         <div id="roomChip" class="live">
             <span class="dot"></span>
             <span id="roomLabel">room</span>
+            <span id="netBadge">LAN</span>
             <button id="copyBtn" class="copy" type="button">Copy</button>
-            <button id="settingsBtn" class="gear" type="button">⚙</button>
         </div>
-    </div>
-    <div id="settingsPanel">
-        <h3>Call settings</h3>
-        <button id="fitBtn" type="button">Fit / Fill</button>
-        <button id="pipBtn" type="button">Picture in picture</button>
     </div>
     <div id="httpsWarn">iPhone and iPad need HTTPS for camera and mic.</div>
     <div id="cellWarn">
@@ -681,7 +688,6 @@
             <button class="fx-item" data-fx="party" type="button"><span class="fx-ico">😻</span>Glasses + ears</button>
         </div>
     </div>
-    <video id="pipSink" autoplay playsinline webkit-playsinline></video>
     <video id="fxSrc" autoplay muted playsinline webkit-playsinline></video>
     <canvas id="fxCanvas"></canvas>
     <div id="statusLog" class="log"></div>
@@ -748,6 +754,41 @@
         function sameLan(info) {
             return !!(info && info.net && myNetHash && info.net === myNetHash);
         }
+        function refreshNetBadge() {
+            const el = document.getElementById("netBadge");
+            if (!el) return;
+            if (onCellular()) {
+                el.textContent = "Cellular";
+                el.className = "cell";
+                return;
+            }
+            const remotes = [...document.querySelectorAll(".tile.remote")];
+            if (!remotes.length) {
+                el.textContent = "LAN";
+                el.className = "";
+                return;
+            }
+            const hashes = [];
+            remotes.forEach(t => {
+                const id = t.id.replace(/^tile-/, "");
+                const p = peers.get(id);
+            });
+            let lan = 0, other = 0;
+            document.querySelectorAll(".tile.remote").forEach(t => {
+                if (t.classList.contains("same-net")) lan++;
+                else other++;
+            });
+            if (other && lan) {
+                el.textContent = "Mixed";
+                el.className = "relay";
+            } else if (other) {
+                el.textContent = "Relay";
+                el.className = "relay";
+            } else {
+                el.textContent = "LAN";
+                el.className = "";
+            }
+        }
         function schoolOn() {
             return false;
         }
@@ -813,7 +854,7 @@
         const flipBtn = document.getElementById("flipBtn");
         const shareBtn = document.getElementById("shareBtn");
         const fxBtn = document.getElementById("fxBtn");
-        const pipBtn = document.getElementById("pipBtn");
+        const pipBtn = null;
         const fxPanel = document.getElementById("fxPanel");
         const fxSrc = document.getElementById("fxSrc");
         const fxCanvas = document.getElementById("fxCanvas");
@@ -841,7 +882,7 @@
         let fxStream = null;
         let fxLastLm = null;
         let fxReady = false;
-        let fillMode = storeGet(FIT_KEY) !== "0";
+        let fillMode = false;
         const peers = new Map();
         let participantsUnsub = null;
         let removedUnsub = null;
@@ -890,13 +931,9 @@
         }
         function applyFitMode() {
             document.querySelectorAll(".tile").forEach(t => {
-                const useFit = t.classList.contains("sharing") || !fillMode;
-                t.classList.toggle("fit", useFit);
-                t.classList.toggle("fill", !useFit);
+                t.classList.add("fit");
+                t.classList.remove("fill");
             });
-            localTile.classList.toggle("fit", !fillMode);
-            localTile.classList.toggle("fill", fillMode);
-            if (fitBtn) fitBtn.textContent = fillMode ? "Fill camera" : "Fit camera";
         }
         function syncCameraMirror() {
             const track = localStream?.getVideoTracks?.()[0];
@@ -1718,65 +1755,6 @@
             applyLocalMediaState();
             applyFitMode();
         }
-        function pipVideo() {
-            const remote = videosEl.querySelector(".tile.remote video");
-            if (remote && remote.srcObject) return remote;
-            return localVideo;
-        }
-        async function startPip() {
-            const src = pipVideo();
-            const sink = document.getElementById("pipSink");
-            if (!src || !sink) return;
-            sink.srcObject = src.srcObject;
-            sink.muted = src === localVideo;
-            sink.disablePictureInPicture = false;
-            sink.setAttribute("playsinline", "");
-            try { await sink.play(); } catch (_) {}
-            try {
-                if (document.pictureInPictureElement) {
-                    await document.exitPictureInPicture();
-                    return;
-                }
-                if (sink.webkitSupportsPresentationMode && typeof sink.webkitSetPresentationMode === "function") {
-                    sink.webkitSetPresentationMode(
-                        sink.webkitPresentationMode === "picture-in-picture" ? "inline" : "picture-in-picture"
-                    );
-                    return;
-                }
-                if (sink.requestPictureInPicture) {
-                    await sink.requestPictureInPicture();
-                    return;
-                }
-                if (window.documentPictureInPicture?.requestWindow) {
-                    const win = await documentPictureInPicture.requestWindow({ width: 280, height: 180 });
-                    const nv = document.createElement("video");
-                    nv.autoplay = true;
-                    nv.playsInline = true;
-                    nv.srcObject = sink.srcObject;
-                    nv.style.cssText = "width:100%;height:100%;object-fit:cover;background:#111;margin:0";
-                    win.document.body.style.cssText = "margin:0;background:#111";
-                    win.document.body.appendChild(nv);
-                    nv.play().catch(() => {});
-                    return;
-                }
-                alert("Picture-in-picture is not available in this browser.");
-            } catch (e) {
-                log("PiP blocked");
-                alert("PiP was blocked. Tap Picture in picture while the call is visible, then swipe away.");
-            }
-        }
-        const settingsBtn = document.getElementById("settingsBtn");
-        const settingsPanel = document.getElementById("settingsPanel");
-        settingsBtn.onclick = (e) => {
-            e.stopPropagation();
-            settingsPanel.classList.toggle("on");
-        };
-        document.addEventListener("click", (e) => {
-            if (!e.target.closest("#settingsPanel") && !e.target.closest("#settingsBtn")) {
-                settingsPanel.classList.remove("on");
-            }
-        });
-        pipBtn.onclick = () => { startPip(); settingsPanel.classList.remove("on"); };
         async function confirmCellular() {
             if (!onCellular()) return true;
             if (sessionStorage.getItem("wisprtc.cellok") === "1") return true;
@@ -1790,13 +1768,6 @@
                 };
             });
         }
-        document.addEventListener("enterpictureinpicture", () => pipBtn.classList.add("on"));
-        document.addEventListener("leavepictureinpicture", () => pipBtn.classList.remove("on"));
-        document.addEventListener("visibilitychange", () => {
-            if (document.visibilityState !== "hidden") return;
-            if (!document.body.classList.contains("in-call")) return;
-            startPip();
-        });
         document.getElementById("hangup").onclick = () => leaveRoom(true);
         async function enter() {
             displayName = cleanUsername(nameInput.value);
@@ -1845,6 +1816,7 @@
             setInCall(true);
             roomChip.classList.add("on");
             roomLabel.textContent = roomId;
+            refreshNetBadge();
             log("In room " + roomId);
             const meRef = ref(db, `rooms/${roomId}/participants/${myId}`);
             try { await onDisconnect(meRef).remove(); } catch (_) {}
@@ -1955,6 +1927,7 @@
             }
             paintAva(tile.querySelector(".cam-off-badge .ava"), n);
             applyFitMode();
+            refreshNetBadge();
         }
         function attachLocalTracks(pc) {
             const stream = localStream || cameraStream;
