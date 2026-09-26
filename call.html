@@ -1146,84 +1146,83 @@
             ctx.fill();
             ctx.restore();
         }
-        function roundedLens(ctx, x, y, rw, rh, rot) {
-            ctx.save();
-            ctx.translate(x, y);
-            ctx.rotate(rot);
-            const r = Math.min(rw, rh) * 0.42;
-            ctx.beginPath();
-            ctx.moveTo(-rw + r, -rh);
-            ctx.lineTo(rw - r, -rh);
-            ctx.quadraticCurveTo(rw, -rh, rw, -rh + r);
-            ctx.lineTo(rw, rh - r);
-            ctx.quadraticCurveTo(rw, rh, rw - r, rh);
-            ctx.lineTo(-rw + r, rh);
-            ctx.quadraticCurveTo(-rw, rh, -rw, rh - r);
-            ctx.lineTo(-rw, -rh + r);
-            ctx.quadraticCurveTo(-rw, -rh, -rw + r, -rh);
-            ctx.closePath();
-            ctx.restore();
-        }
+        function roundedLens() {}
         function drawGlasses(ctx, lm, w, h) {
             const lOuter = lmPt(lm, 33, w, h);
             const lInner = lmPt(lm, 133, w, h);
             const rInner = lmPt(lm, 362, w, h);
             const rOuter = lmPt(lm, 263, w, h);
-            const lIris = lm[468] ? lmPt(lm, 468, w, h) : { x: (lOuter.x + lInner.x) / 2, y: (lOuter.y + lInner.y) / 2 };
-            const rIris = lm[473] ? lmPt(lm, 473, w, h) : { x: (rOuter.x + rInner.x) / 2, y: (rOuter.y + rInner.y) / 2 };
+            const lEye = { x: (lOuter.x + lInner.x) / 2, y: (lOuter.y + lInner.y) / 2 };
+            const rEye = { x: (rOuter.x + rInner.x) / 2, y: (rOuter.y + rInner.y) / 2 };
             const bridge = lmPt(lm, 168, w, h);
-            const roll = Math.atan2(rIris.y - lIris.y, rIris.x - lIris.x);
+            const zL = ((lm[33]?.z ?? 0) + (lm[133]?.z ?? 0)) * 0.5;
+            const zR = ((lm[263]?.z ?? 0) + (lm[362]?.z ?? 0)) * 0.5;
+            const yaw = Math.max(-0.85, Math.min(0.85, (zR - zL) * 10));
+            const roll = Math.atan2(rEye.y - lEye.y, rEye.x - lEye.x);
             const eyeW = (Math.hypot(lOuter.x - lInner.x, lOuter.y - lInner.y) + Math.hypot(rOuter.x - rInner.x, rOuter.y - rInner.y)) / 2;
-            const rw = eyeW * 0.72;
-            const rh = eyeW * 0.42;
-            const thick = Math.max(2.6, eyeW * 0.09);
+            const baseW = eyeW * 0.84;
+            const baseH = eyeW * 0.50;
+            const thick = Math.max(3.2, eyeW * 0.13);
             ctx.save();
             ctx.lineJoin = "round";
             ctx.lineCap = "round";
-            function oneLens(c) {
-                roundedLens(ctx, c.x, c.y + rh * 0.08, rw, rh, roll);
-                const glass = ctx.createLinearGradient(c.x - rw, c.y - rh, c.x + rw, c.y + rh);
-                glass.addColorStop(0, "rgba(255,255,255,0.20)");
-                glass.addColorStop(0.35, "rgba(180,200,220,0.08)");
-                glass.addColorStop(1, "rgba(30,40,55,0.14)");
+            function oneLens(c, side) {
+                const near = side < 0 ? -yaw : yaw;
+                const sx = Math.max(0.42, 1 - Math.max(0, near) * 0.72);
+                const sy = Math.max(0.72, 1 - Math.abs(yaw) * 0.12);
+                const skew = yaw * side * 0.28;
+                const rw = baseW * sx;
+                const rh = baseH * sy;
+                ctx.save();
+                ctx.translate(c.x, c.y + rh * 0.1);
+                ctx.rotate(roll);
+                ctx.transform(1, 0, skew, 1, 0, 0);
+                const rad = Math.min(rw, rh) * 0.36;
+                ctx.beginPath();
+                ctx.moveTo(-rw + rad, -rh);
+                ctx.lineTo(rw - rad, -rh);
+                ctx.quadraticCurveTo(rw, -rh, rw, -rh + rad);
+                ctx.lineTo(rw, rh - rad);
+                ctx.quadraticCurveTo(rw, rh, rw - rad, rh);
+                ctx.lineTo(-rw + rad, rh);
+                ctx.quadraticCurveTo(-rw, rh, -rw, rh - rad);
+                ctx.lineTo(-rw, -rh + rad);
+                ctx.quadraticCurveTo(-rw, -rh, -rw + rad, -rh);
+                ctx.closePath();
+                const glass = ctx.createLinearGradient(-rw, -rh, rw, rh);
+                glass.addColorStop(0, "rgba(255,255,255," + (0.16 + (1 - sx) * 0.12) + ")");
+                glass.addColorStop(0.45, "rgba(160,190,220,0.08)");
+                glass.addColorStop(1, "rgba(20,30,45,0.18)");
                 ctx.fillStyle = glass;
                 ctx.fill();
-                ctx.strokeStyle = "#141820";
-                ctx.lineWidth = thick;
+                ctx.strokeStyle = "#0e1218";
+                ctx.lineWidth = thick * (0.85 + sx * 0.15);
                 ctx.stroke();
-                ctx.save();
-                ctx.translate(c.x, c.y + rh * 0.08);
-                ctx.rotate(roll);
-                ctx.strokeStyle = "rgba(255,255,255,.5)";
-                ctx.lineWidth = Math.max(1, thick * 0.22);
+                ctx.strokeStyle = "rgba(255,255,255,.4)";
+                ctx.lineWidth = Math.max(1, thick * 0.2);
                 ctx.beginPath();
-                ctx.ellipse(-rw * 0.22, -rh * 0.38, rw * 0.42, rh * 0.16, -0.35, 0, Math.PI);
+                ctx.ellipse(-rw * 0.16, -rh * 0.3, rw * 0.34, rh * 0.12, -0.3, 0, Math.PI);
                 ctx.stroke();
                 ctx.restore();
+                return { rw, rh };
             }
-            oneLens(lIris);
-            oneLens(rIris);
-            ctx.strokeStyle = "#141820";
+            const left = oneLens(lEye, -1);
+            const right = oneLens(rEye, 1);
+            const midY = (lEye.y + rEye.y) / 2 + baseH * 0.1;
+            ctx.strokeStyle = "#0e1218";
             ctx.lineWidth = thick * 0.7;
-            const midY = (lIris.y + rIris.y) / 2 + rh * 0.08;
             ctx.beginPath();
-            ctx.moveTo(lIris.x + rw * 0.92, midY);
-            ctx.quadraticCurveTo(bridge.x, bridge.y + rh * 0.15, rIris.x - rw * 0.92, midY);
+            ctx.moveTo(lEye.x + left.rw * 0.72, midY);
+            ctx.quadraticCurveTo(bridge.x, midY + baseH * (0.08 + yaw * yaw * 0.2), rEye.x - right.rw * 0.72, midY);
             ctx.stroke();
-            ctx.lineWidth = thick * 0.55;
+            const lArm = baseW * (0.7 + Math.max(0, -yaw) * 0.8);
+            const rArm = baseW * (0.7 + Math.max(0, yaw) * 0.8);
+            ctx.lineWidth = thick * 0.65;
             ctx.beginPath();
-            ctx.arc(lIris.x + rw * 0.15, midY + rh * 0.55, thick * 0.7, 0, Math.PI);
-            ctx.stroke();
-            ctx.beginPath();
-            ctx.arc(rIris.x - rw * 0.15, midY + rh * 0.55, thick * 0.7, 0, Math.PI);
-            ctx.stroke();
-            const arm = rw * 1.15;
-            ctx.lineWidth = thick * 0.75;
-            ctx.beginPath();
-            ctx.moveTo(lIris.x - rw, midY);
-            ctx.lineTo(lIris.x - rw - Math.cos(roll) * arm, midY - Math.sin(roll) * arm * 0.15);
-            ctx.moveTo(rIris.x + rw, midY);
-            ctx.lineTo(rIris.x + rw + Math.cos(roll) * arm, midY - Math.sin(roll) * arm * 0.15);
+            ctx.moveTo(lEye.x - left.rw * 0.82, midY);
+            ctx.lineTo(lEye.x - left.rw * 0.82 - Math.cos(roll) * lArm, midY + baseH * (0.2 + Math.max(0, yaw) * 0.35));
+            ctx.moveTo(rEye.x + right.rw * 0.82, midY);
+            ctx.lineTo(rEye.x + right.rw * 0.82 + Math.cos(roll) * rArm, midY + baseH * (0.2 + Math.max(0, -yaw) * 0.35));
             ctx.stroke();
             ctx.restore();
         }
@@ -1238,12 +1237,12 @@
             const ulen = Math.hypot(upx, upy) || 1;
             const ux = upx / ulen, uy = upy / ulen;
             const px = -uy, py = ux;
-            const earH = ulen * 0.36;
-            const earW = ulen * 0.155;
+            const earH = ulen * 0.24;
+            const earW = ulen * 0.12;
             function ear(anchor, dir) {
                 const base = {
-                    x: anchor.x + ux * ulen * 0.28 + px * dir * ulen * 0.22,
-                    y: anchor.y + uy * ulen * 0.28 + py * dir * ulen * 0.22
+                    x: top.x + px * dir * ulen * 0.20 + ux * ulen * 0.04,
+                    y: top.y + py * dir * ulen * 0.20 + uy * ulen * 0.04
                 };
                 const tip = {
                     x: base.x + ux * earH + px * dir * earW * 0.55,
@@ -2259,4 +2258,3 @@
     </script>
 </body>
 </html>
-
