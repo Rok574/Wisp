@@ -194,15 +194,15 @@
             inset: 0;
             width: 100%;
             height: 100%;
-            object-fit: cover;
+            object-fit: cover !important;
             object-position: center;
             background: #0a0c11;
             display: block;
         }
-        .tile.fit video { object-fit: contain; }
-        .tile.sharing video { object-fit: contain; }
-        .tile.local:not(.sharing) video { object-fit: contain !important; }
-        .tile.local.fill:not(.sharing) video { object-fit: cover !important; }
+        .tile.fit video { object-fit: contain !important; }
+        .tile.sharing video { object-fit: contain !important; }
+        .tile.local:not(.sharing) video { object-fit: cover !important; }
+        .tile.remote:not(.sharing):not(.fit) video { object-fit: cover !important; }
         .tile.local video { transform: scaleX(-1); }
         .tile.local.back-camera video,
         .tile.local.sharing video { transform: none; }
@@ -227,7 +227,17 @@
             font-size: 13px;
             font-weight: 750;
         }
-        .tile.waiting .tile-wait { display: flex; }
+        .tile.waiting .tile-wait {
+            display: flex;
+            background: rgba(10,12,18,.78);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+        }
+        .tile.waiting video,
+        .tile.waiting .tile-snap {
+            filter: blur(22px) saturate(.5);
+            transform: scale(1.12);
+        }
         .tile-snap {
             display: none;
             position: absolute;
@@ -848,8 +858,8 @@
                 }
             }
         }
-        const FX_W = 1280;
-        const FX_H = 720;
+        const FX_W = 720;
+        const FX_H = 1280;
         function fxActive() {
             return !sharing && !!cameraStream;
         }
@@ -858,7 +868,7 @@
         }
         function mapLmToCanvas(lm, sw, sh, cw, ch) {
             if (!lm || !sw || !sh) return lm;
-            const scale = Math.min(cw / sw, ch / sh);
+            const scale = Math.max(cw / sw, ch / sh);
             const ox = (cw - sw * scale) / 2;
             const oy = (ch - sh * scale) / 2;
             return lm.map(p => ({
@@ -1076,7 +1086,7 @@
             const sw = src.videoWidth || src.width || cw;
             const sh = src.videoHeight || src.height || ch;
             if (!sw || !sh) return;
-            const scale = Math.min(cw / sw, ch / sh);
+            const scale = Math.max(cw / sw, ch / sh);
             const dw = sw * scale;
             const dh = sh * scale;
             ctx.drawImage(src, (cw - dw) / 2, (ch - dh) / 2, dw, dh);
@@ -1286,6 +1296,24 @@
                 });
             } catch (_) {}
         }
+        async function clearPeerSignals(remoteId) {
+            if (!roomId || !myId || !remoteId) return;
+            const [x, y] = myId < remoteId ? [myId, remoteId] : [remoteId, myId];
+            try { await remove(ref(db, `rooms/${roomId}/signals/${x}_${y}`)); } catch (_) {}
+        }
+        async function rebuildPeer(remoteId, info = {}, useRelay = false) {
+            const entry = peers.get(remoteId);
+            if (entry?.rebuilding) return;
+            if (entry) entry.rebuilding = true;
+            setPeerWait(remoteId, true, "Reconnecting");
+            if (entry) {
+                entry.unsubscribers.forEach(fn => { try { fn(); } catch (_) {} });
+                try { entry.pc.close(); } catch (_) {}
+                peers.delete(remoteId);
+            }
+            await clearPeerSignals(remoteId);
+            await ensurePeer(remoteId, myId < remoteId, useRelay, info);
+        }
         function setPeerWait(id, on, text) {
             const tile = document.getElementById("tile-" + id);
             if (!tile) return;
@@ -1298,16 +1326,15 @@
             if (!roomId || !localStream) return;
             for (const [id, entry] of peers.entries()) {
                 const st = entry.pc?.connectionState;
-                if (st === "failed") {
+                if (st === "failed" || st === "disconnected") {
                     entry.bad = (entry.bad || 0) + 1;
-                    if (entry.bad >= 2) {
-                        setPeerWait(id, true, "Reconnecting");
-                        publishPreviewFrame();
-                    }
+                    setPeerWait(id, true, "Reconnecting");
                     try { entry.pc.restartIce(); } catch (_) {}
+                    if (entry.bad >= 2) {
+                        await rebuildPeer(id, {}, entry.bad >= 3);
+                    }
                 } else if (st === "closed") {
-                    peers.delete(id);
-                    await ensurePeer(id, myId < id, false, {});
+                    await rebuildPeer(id, {}, true);
                 } else if (st === "connected" || st === "connecting") {
                     if (document.getElementById("tile-" + id)?.classList.contains("cam-off")) {
                         entry.bad = 0;
@@ -1327,7 +1354,7 @@
                         entry.lastBytes = bytes;
                         if (entry.bad >= 4) {
                             setPeerWait(id, true, "Reconnecting");
-                            publishPreviewFrame();
+                            await rebuildPeer(id, {}, true);
                         } else if (entry.bad === 0) {
                             setPeerWait(id, false);
                         }
@@ -1749,10 +1776,15 @@
             pc.onconnectionstatechange = () => {
                 log((info.name || remoteId.slice(0, 6)) + ": " + pc.connectionState);
                 if (pc.connectionState === "connected") setPeerWait(remoteId, false);
-                if (pc.connectionState === "failed") {
+                if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
                     setPeerWait(remoteId, true, "Reconnecting");
-                    publishPreviewFrame();
                     try { pc.restartIce(); } catch (_) {}
+                    setTimeout(() => {
+                        const cur = peers.get(remoteId);
+                        if (!cur || cur.pc !== pc) return;
+                        if (pc.connectionState === "connected") return;
+                        rebuildPeer(remoteId, info, true);
+                    }, 3000);
                 }
             };
             if (!relayOnly) {
