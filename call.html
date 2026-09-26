@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -21,6 +22,7 @@
             --green: #3dd68c;
             --red: #f23f42;
             --safe-bottom: env(safe-area-inset-bottom, 0px);
+            --bar-space: calc(118px + var(--safe-bottom));
         }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); }
@@ -33,8 +35,7 @@
                 radial-gradient(900px 480px at 50% -20%, rgba(109,124,255,.18), transparent 55%),
                 var(--bg);
         }
-        body.in-call { background: #0b0d12; }
-
+        body.in-call { background: #0b0d12; overflow: hidden; }
         .topbar {
             height: 56px;
             display: flex;
@@ -42,6 +43,7 @@
             justify-content: space-between;
             padding: 0 16px;
             flex-shrink: 0;
+            z-index: 6;
         }
         .brand { display: flex; align-items: center; gap: 10px; font-weight: 760; letter-spacing: -.2px; }
         .logo {
@@ -65,18 +67,15 @@
             border: 0; background: rgba(255,255,255,.08); color: #fff;
             border-radius: 999px; padding: 6px 11px; font-weight: 650; font-size: 12px;
         }
-
         #httpsWarn {
             display: none; margin: 0 16px 12px; padding: 10px 12px;
             background: #3a2a12; color: #f0c36a; border-radius: 12px; font-size: 13px;
         }
-
         #lobbyWrap {
             flex: 1; display: flex; align-items: center; justify-content: center;
             padding: 12px 16px 28px;
         }
         body.in-call #lobbyWrap { display: none; }
-
         #lobby {
             width: min(440px, 100%);
             background: var(--panel);
@@ -115,7 +114,6 @@
             display: grid; place-items: center; font-weight: 800; color: #fff; font-size: 12px;
             background: var(--accent);
         }
-
         #stage {
             display: none;
             flex: 1;
@@ -123,31 +121,40 @@
             min-height: 0;
         }
         body.in-call #stage { display: block; }
-
         #videos {
             height: 100%;
             display: grid;
             gap: 12px;
-            padding: 4px 16px 108px;
+            padding: 4px 16px var(--bar-space);
             align-content: stretch;
             justify-items: stretch;
             grid-template-columns: 1fr;
+            grid-auto-rows: minmax(0, 1fr);
         }
         #videos.one { grid-template-columns: 1fr; }
         #videos.count-2 { grid-template-columns: 1fr; }
         #videos.count-3, #videos.count-4 { grid-template-columns: 1fr 1fr; }
-
         .tile {
             position: relative;
             background: #12141b;
             border-radius: 18px;
             overflow: hidden;
             min-height: 0;
+            min-width: 0;
             border: 1px solid var(--line);
         }
-        video { width: 100%; height: 100%; object-fit: cover; background: #0a0c11; display: block; }
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            object-position: center;
+            background: #0a0c11;
+            display: block;
+        }
+        .tile.fill video { object-fit: cover; }
         .tile.local video { transform: scaleX(-1); }
-        .tile.local.back-camera video { transform: none; }
+        .tile.local.back-camera video,
+        .tile.local.sharing video { transform: none; }
         .tile.cam-off video { opacity: 0; }
         .cam-off-badge {
             display: none; position: absolute; inset: 0;
@@ -163,25 +170,33 @@
             backdrop-filter: blur(10px);
             padding: 6px 10px; border-radius: 999px;
             display: flex; align-items: center; gap: 7px;
+            max-width: calc(100% - 90px);
+            z-index: 2;
         }
-        .micdot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
+        .micdot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
         .micdot.off { background: var(--red); }
-        .tile-btns { position: absolute; right: 12px; bottom: 12px; display: flex; gap: 6px; }
+        .tile-btns { position: absolute; right: 12px; bottom: 12px; display: flex; gap: 6px; z-index: 2; }
         .tile-btns button {
             height: 32px; padding: 0 10px; border: 0; border-radius: 999px;
             background: rgba(10,12,18,.72); color: #fff; font-size: 12px; font-weight: 700;
         }
         .tile-btns button.on { background: var(--red); }
-
-        /* Meet-style self view when others are in the room */
+        .share-pill {
+            display: none;
+            position: absolute; top: 12px; left: 12px;
+            font-size: 11px; font-weight: 800; letter-spacing: .3px;
+            background: var(--accent); color: #fff;
+            padding: 5px 10px; border-radius: 999px; z-index: 2;
+        }
+        .tile.sharing .share-pill { display: block; }
         @media (min-width: 760px) {
             #videos.count-2 { grid-template-columns: 1fr; padding-right: 16px; }
             #videos:not(.one) .tile.local {
                 position: absolute;
-                width: min(240px, 28vw);
-                height: 150px;
+                width: min(260px, 30vw);
+                height: min(168px, 22vh);
                 right: 22px;
-                bottom: 108px;
+                bottom: var(--bar-space);
                 z-index: 5;
                 border-radius: 16px;
                 box-shadow: 0 16px 40px rgba(0,0,0,.4);
@@ -190,32 +205,34 @@
             #videos.count-5, #videos.count-6 { grid-template-columns: 1fr 1fr 1fr; }
         }
         @media (max-width: 759px) {
-            #videos { padding: 0 12px 118px; gap: 10px; }
-            #videos.count-2 .tile.local { min-height: 120px; }
+            #videos { padding: 0 12px var(--bar-space); gap: 10px; }
+            #videos.count-2 .tile.local { min-height: 140px; }
             .tile { border-radius: 16px; }
         }
-
         .bar {
             position: fixed; left: 50%; bottom: calc(16px + var(--safe-bottom));
             transform: translateX(-50%);
             display: none;
-            align-items: center; gap: 10px;
+            align-items: center; gap: 8px;
             padding: 10px 12px;
             background: rgba(22,24,31,.86);
             border: 1px solid var(--line);
             backdrop-filter: blur(16px);
             border-radius: 999px;
             z-index: 8;
+            max-width: calc(100vw - 16px);
+            overflow-x: auto;
         }
         body.in-call .bar { display: flex; }
         .bar button {
             width: 48px; height: 48px; border: 0; border-radius: 50%;
-            background: #2a2e3a; color: #fff; font-size: 11px; font-weight: 750;
+            background: #2a2e3a; color: #fff; font-size: 10px; font-weight: 750;
+            flex-shrink: 0;
         }
         .bar button.on { background: var(--red); }
+        .bar #shareBtn.on { background: var(--accent); }
         .bar #hangup { background: var(--red); width: 56px; }
         .log { display: none; }
-
         @media (min-width: 760px) {
             .bar button { width: 52px; height: 52px; }
         }
@@ -240,7 +257,6 @@
         </div>
     </div>
     <div id="httpsWarn">iPhone and iPad need HTTPS for camera and mic.</div>
-
     <div id="lobbyWrap">
         <div id="lobby">
             <h2>Hop into a room</h2>
@@ -260,34 +276,35 @@
             </div>
         </div>
     </div>
-
     <div id="stage">
         <div id="videos" class="one count-1">
             <div class="tile local" id="localTile">
                 <video id="localVideo" autoplay playsinline webkit-playsinline muted></video>
+                <div class="share-pill">Sharing screen</div>
                 <div class="cam-off-badge">
                     <div class="ava" id="localAva">Y</div>
                     Camera off
                 </div>
                 <div class="label"><span class="micdot" id="localMicDot"></span><span id="localName">You</span></div>
+                <div class="tile-btns">
+                    <button id="fitBtn" type="button">Fit</button>
+                </div>
             </div>
         </div>
     </div>
-
     <div class="bar" id="callBar">
         <button id="muteBtn" type="button">Mute</button>
         <button id="camBtn" type="button">Video</button>
         <button id="flipBtn" type="button">Flip</button>
+        <button id="shareBtn" type="button">Share</button>
         <button id="hangup" type="button">Leave</button>
     </div>
     <div id="statusLog" class="log"></div>
-
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
         import {
             getDatabase, ref, set, push, onValue, onChildAdded, onChildRemoved, remove, runTransaction
         } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js";
-
         const firebaseConfig = {
             apiKey: "AIzaSyCjbcnSZc5uEcbEqgn68H-CLx2MoMpuqgA",
             authDomain: "jhghugjh-432da.firebaseapp.com",
@@ -298,13 +315,11 @@
             appId: "1:138235206183:web:a49161586a06401664cc02",
             measurementId: "G-BDTG9XPRSQ"
         };
-
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
-
         const USER_KEY = "wisprtc.username";
+        const FIT_KEY = "wisprtc.fill";
         const COLORS = ["#6d7cff","#3dd68c","#f5c542","#eb459e","#f23f42","#00a8fc","#f26522","#b57bff"];
-
         const EXTRA_TURN = [];
         const iceConfig = {
             iceServers: [
@@ -335,38 +350,39 @@
             iceTransportPolicy: "relay",
             iceCandidatePoolSize: 8
         };
-
-        const lobby = document.getElementById("lobby");
         const videosEl = document.getElementById("videos");
         const localVideo = document.getElementById("localVideo");
         const localTile = document.getElementById("localTile");
         const localName = document.getElementById("localName");
         const roomInput = document.getElementById("roomInput");
         const nameInput = document.getElementById("nameInput");
-        const callBar = document.getElementById("callBar");
         const roomChip = document.getElementById("roomChip");
         const roomLabel = document.getElementById("roomLabel");
         const muteBtn = document.getElementById("muteBtn");
         const camBtn = document.getElementById("camBtn");
         const flipBtn = document.getElementById("flipBtn");
+        const shareBtn = document.getElementById("shareBtn");
+        const fitBtn = document.getElementById("fitBtn");
         const statusLog = document.getElementById("statusLog");
         const previewAva = document.getElementById("previewAva");
         const savedHint = document.getElementById("savedHint");
         const localAva = document.getElementById("localAva");
         const localMicDot = document.getElementById("localMicDot");
         if (!window.isSecureContext) document.getElementById("httpsWarn").style.display = "block";
-
         let localStream = null;
+        let cameraStream = null;
+        let screenStream = null;
         let myId = null;
         let roomId = null;
         let displayName = "You";
         let facing = "user";
         let micOn = true;
         let camOn = true;
+        let sharing = false;
+        let fillMode = storeGet(FIT_KEY) === "1";
         const peers = new Map();
         let participantsUnsub = null;
         let removedUnsub = null;
-
         function storeGet(key) {
             try { return localStorage.getItem(key) || ""; } catch (_) { return ""; }
         }
@@ -390,7 +406,6 @@
         function uid() {
             return Math.random().toString(36).slice(2, 8).toUpperCase();
         }
-
         function cleanRoomCode(raw) {
             return String(raw || "")
                 .trim()
@@ -400,22 +415,26 @@
                 .slice(0, 32)
                 .toUpperCase();
         }
+        function applyFitMode() {
+            document.querySelectorAll(".tile").forEach(t => t.classList.toggle("fill", fillMode && !t.classList.contains("sharing")));
+            fitBtn.textContent = fillMode ? "Fill" : "Fit";
+        }
         function syncCameraMirror() {
             const track = localStream?.getVideoTracks?.()[0];
             const mode = track?.getSettings?.().facingMode || facing;
-            localTile.classList.toggle("back-camera", mode === "environment");
+            localTile.classList.toggle("back-camera", !sharing && mode === "environment");
+            localTile.classList.toggle("sharing", sharing);
         }
-
         async function playVideo(el) { try { await el.play(); } catch (_) {} }
         function layout() {
             const n = videosEl.children.length;
-            videosEl.classList.toggle("one", n <= 1);
             videosEl.className = videosEl.className
                 .replace(/count-\d+/g, "")
+                .replace(/\bone\b/g, "")
                 .trim() + " count-" + n;
             if (n <= 1) videosEl.classList.add("one");
+            applyFitMode();
         }
-
         function cleanUsername(raw) {
             return String(raw || "").replace(/\s+/g, " ").trim().slice(0, 20);
         }
@@ -424,20 +443,28 @@
             paintAva(previewAva, name || "?");
             savedHint.textContent = name ? ("Saved as " + name) : "No saved username yet";
         }
-
         nameInput.value = storeGet(USER_KEY);
         refreshUserPreview();
+        applyFitMode();
         nameInput.addEventListener("input", () => {
             const name = cleanUsername(nameInput.value);
             if (name) storeSet(USER_KEY, name);
             refreshUserPreview();
         });
-
         async function getMedia(face = facing) {
             if (!navigator.mediaDevices?.getUserMedia) {
                 throw new Error("Need HTTPS for camera on iPhone/iPad");
             }
             const tries = [
+                {
+                    video: {
+                        facingMode: { ideal: face },
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
+                        aspectRatio: { ideal: 16 / 9 }
+                    },
+                    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+                },
                 { video: { facingMode: { ideal: face } }, audio: { echoCancellation: true, noiseSuppression: true } },
                 { video: true, audio: true }
             ];
@@ -448,32 +475,54 @@
             }
             throw last;
         }
-
+        async function replaceOutgoingVideo(track) {
+            for (const { pc } of peers.values()) {
+                const sender = pc.getSenders().find(s => s.track && s.track.kind === "video")
+                    || pc.getSenders().find(s => s.track == null && s.track === null);
+                const videoSender = pc.getSenders().find(s => (s.track && s.track.kind === "video") || s.track == null);
+                const s = pc.getSenders().find(x => x.track?.kind === "video") || pc.getSenders().find(x => !x.track);
+                if (s && track) {
+                    try { await s.replaceTrack(track); } catch (_) {}
+                }
+            }
+        }
+        async function replaceOutgoingAudio(track) {
+            for (const { pc } of peers.values()) {
+                const s = pc.getSenders().find(x => x.track?.kind === "audio");
+                if (s && track) {
+                    try { await s.replaceTrack(track); } catch (_) {}
+                }
+            }
+        }
         function applyLocalMediaState() {
             if (!localStream) return;
             localStream.getAudioTracks().forEach(t => t.enabled = micOn);
-            localStream.getVideoTracks().forEach(t => t.enabled = camOn);
-            localTile.classList.toggle("cam-off", !camOn);
+            if (!sharing) localStream.getVideoTracks().forEach(t => t.enabled = camOn);
+            localTile.classList.toggle("cam-off", !camOn && !sharing);
             localMicDot.classList.toggle("off", !micOn);
             muteBtn.classList.toggle("on", !micOn);
             muteBtn.textContent = micOn ? "Mute" : "Unmute";
             camBtn.classList.toggle("on", !camOn);
             camBtn.textContent = camOn ? "Video" : "Cam off";
+            shareBtn.classList.toggle("on", sharing);
+            shareBtn.textContent = sharing ? "Stop" : "Share";
+            flipBtn.disabled = sharing;
+            flipBtn.style.opacity = sharing ? ".45" : "1";
+            syncCameraMirror();
             publishState();
         }
-
         async function publishState() {
             if (!roomId || !myId) return;
             try {
                 await set(ref(db, `rooms/${roomId}/participants/${myId}`), {
-                    name: displayName, micOn, camOn, joinedAt: Date.now()
+                    name: displayName, micOn, camOn, sharing, joinedAt: Date.now()
                 });
             } catch (_) {}
         }
-
         async function startMedia() {
-            if (localStream) return localStream;
-            localStream = await getMedia();
+            if (localStream && !sharing) return localStream;
+            cameraStream = await getMedia();
+            localStream = cameraStream;
             localVideo.srcObject = localStream;
             localVideo.muted = true;
             syncCameraMirror();
@@ -481,13 +530,11 @@
             applyLocalMediaState();
             return localStream;
         }
-
         document.getElementById("createBtn").onclick = async () => {
             roomInput.value = uid();
             await enter();
         };
         document.getElementById("joinBtn").onclick = () => enter();
-
         roomInput.addEventListener("input", () => {
             const start = roomInput.selectionStart;
             const cleaned = cleanRoomCode(roomInput.value);
@@ -496,7 +543,6 @@
                 try { roomInput.setSelectionRange(cleaned.length, cleaned.length); } catch (_) {}
             }
         });
-
         roomInput.addEventListener("keydown", e => {
             if (e.key === "Enter") {
                 e.preventDefault();
@@ -508,32 +554,96 @@
             document.getElementById("copyBtn").textContent = "Copied";
             setTimeout(() => document.getElementById("copyBtn").textContent = "Copy", 1200);
         };
-
         muteBtn.onclick = () => { micOn = !micOn; applyLocalMediaState(); };
-        camBtn.onclick = () => { camOn = !camOn; applyLocalMediaState(); };
+        camBtn.onclick = () => {
+            if (sharing) return;
+            camOn = !camOn;
+            applyLocalMediaState();
+        };
+        fitBtn.onclick = () => {
+            fillMode = !fillMode;
+            storeSet(FIT_KEY, fillMode ? "1" : "0");
+            applyFitMode();
+        };
         flipBtn.onclick = async () => {
+            if (sharing) return;
             const nextFacing = facing === "user" ? "environment" : "user";
             try {
                 const next = await getMedia(nextFacing);
-                const old = localStream;
+                const old = cameraStream;
+                cameraStream = next;
                 localStream = next;
                 facing = next.getVideoTracks()[0]?.getSettings?.().facingMode || nextFacing;
                 localVideo.srcObject = localStream;
                 syncCameraMirror();
                 applyLocalMediaState();
-                for (const { pc } of peers.values()) {
-                    const sender = pc.getSenders().find(s => s.track && s.track.kind === "video");
-                    const vt = localStream.getVideoTracks()[0];
-                    if (sender && vt) sender.replaceTrack(vt);
-                    const as = pc.getSenders().find(s => s.track && s.track.kind === "audio");
-                    const at = localStream.getAudioTracks()[0];
-                    if (as && at) as.replaceTrack(at);
-                }
-                if (old) old.getTracks().forEach(t => t.stop());
+                const vt = localStream.getVideoTracks()[0];
+                const at = localStream.getAudioTracks()[0];
+                await replaceOutgoingVideo(vt);
+                await replaceOutgoingAudio(at);
+                if (old && old !== next) old.getTracks().forEach(t => t.stop());
             } catch (e) { log("Flip failed"); }
         };
+        shareBtn.onclick = () => toggleShare();
+        async function toggleShare() {
+            if (sharing) {
+                await stopShare();
+                return;
+            }
+            if (!navigator.mediaDevices?.getDisplayMedia) {
+                alert("Screen sharing is not available in this browser. Try Chrome or Edge on desktop.");
+                return;
+            }
+            try {
+                screenStream = await navigator.mediaDevices.getDisplayMedia({
+                    video: { frameRate: 15, cursor: "always" },
+                    audio: false
+                });
+            } catch (e) {
+                log("Share cancelled");
+                return;
+            }
+            const screenTrack = screenStream.getVideoTracks()[0];
+            if (!screenTrack) return;
+            sharing = true;
+            camOn = true;
+            const mixed = new MediaStream();
+            mixed.addTrack(screenTrack);
+            const mic = (cameraStream || localStream)?.getAudioTracks?.()[0];
+            if (mic) mixed.addTrack(mic);
+            localStream = mixed;
+            localVideo.srcObject = localStream;
+            await playVideo(localVideo);
+            applyLocalMediaState();
+            applyFitMode();
+            await replaceOutgoingVideo(screenTrack);
+            screenTrack.onended = () => { stopShare(); };
+        }
+        async function stopShare() {
+            if (!sharing) return;
+            sharing = false;
+            if (screenStream) {
+                screenStream.getTracks().forEach(t => t.stop());
+                screenStream = null;
+            }
+            try {
+                if (!cameraStream || !cameraStream.getVideoTracks().some(t => t.readyState === "live")) {
+                    cameraStream = await getMedia(facing);
+                }
+            } catch (_) {}
+            localStream = cameraStream;
+            if (localStream) {
+                localVideo.srcObject = localStream;
+                await playVideo(localVideo);
+                const vt = localStream.getVideoTracks()[0];
+                const at = localStream.getAudioTracks()[0];
+                if (vt) await replaceOutgoingVideo(vt);
+                if (at) await replaceOutgoingAudio(at);
+            }
+            applyLocalMediaState();
+            applyFitMode();
+        }
         document.getElementById("hangup").onclick = () => leaveRoom(true);
-
         async function enter() {
             displayName = cleanUsername(nameInput.value);
             if (!displayName) {
@@ -556,11 +666,9 @@
             }
             await joinRoom(id);
         }
-
         function setInCall(on) {
             document.body.classList.toggle("in-call", on);
         }
-
         async function deleteRoomIfEmpty(id) {
             if (!id) return;
             try {
@@ -572,7 +680,6 @@
                 });
             } catch (_) {}
         }
-
         async function joinRoom(id) {
             id = cleanRoomCode(id);
             if (!id) throw new Error("Invalid room code");
@@ -586,7 +693,6 @@
             await publishState();
             window.addEventListener("pagehide", onPageHide);
             window.addEventListener("beforeunload", onPageHide);
-
             const partsRef = ref(db, `rooms/${roomId}/participants`);
             participantsUnsub = onChildAdded(partsRef, async (snap) => {
                 const remoteId = snap.key;
@@ -608,12 +714,10 @@
                 });
             });
         }
-
         function signalPath(a, b, leaf, relayOnly = false) {
             const [x, y] = a < b ? [a, b] : [b, a];
             return `rooms/${roomId}/signals/${x}_${y}/${relayOnly ? "relay" : "p2p"}/${leaf}`;
         }
-
         function updateRemoteChrome(remoteId, info) {
             const tile = document.getElementById("tile-" + remoteId);
             if (!tile) return;
@@ -622,10 +726,11 @@
             if (nameEl) nameEl.textContent = n + (info.micOn === false ? " muted" : "");
             const dot = tile.querySelector(".micdot");
             if (dot) dot.classList.toggle("off", info.micOn === false);
-            tile.classList.toggle("cam-off", info.camOn === false);
+            tile.classList.toggle("cam-off", info.camOn === false && !info.sharing);
+            tile.classList.toggle("sharing", !!info.sharing);
             paintAva(tile.querySelector(".cam-off-badge .ava"), n);
+            applyFitMode();
         }
-
         async function ensurePeer(remoteId, iAmOfferer, relayOnly = false, info = {}) {
             if (peers.has(remoteId) || !localStream || !roomId) return;
             const pc = new RTCPeerConnection(relayOnly ? iceRelayOnly : iceConfig);
@@ -633,7 +738,6 @@
             const remoteStream = new MediaStream();
             peers.set(remoteId, { pc, unsubscribers, remoteStream, muted: false });
             localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
-
             const tile = document.createElement("div");
             tile.className = "tile remote";
             tile.id = "tile-" + remoteId;
@@ -651,6 +755,9 @@
             av.className = "ava";
             paintAva(av, info.name || remoteId);
             badge.append(av, document.createTextNode("Camera off"));
+            const sharePill = document.createElement("div");
+            sharePill.className = "share-pill";
+            sharePill.textContent = "Sharing screen";
             const label = document.createElement("div");
             label.className = "label";
             const dot = document.createElement("span");
@@ -674,16 +781,21 @@
                 muteThem.textContent = p.muted ? "Hear" : "Mute";
             };
             btns.appendChild(muteThem);
-            tile.append(v, badge, label, btns);
+            tile.append(v, sharePill, badge, label, btns);
             videosEl.appendChild(tile);
             layout();
             playVideo(v);
             updateRemoteChrome(remoteId, info);
-
             pc.ontrack = (ev) => {
                 ev.streams[0].getTracks().forEach(t => {
                     if (!remoteStream.getTracks().some(x => x.id === t.id)) remoteStream.addTrack(t);
                 });
+                if (ev.track) {
+                    ev.track.onunmute = () => playVideo(v);
+                    ev.track.onended = () => {
+                        try { remoteStream.removeTrack(ev.track); } catch (_) {}
+                    };
+                }
                 const p = peers.get(remoteId);
                 if (p?.muted) remoteStream.getAudioTracks().forEach(t => t.enabled = false);
                 v.srcObject = remoteStream;
@@ -702,7 +814,6 @@
                     await ensurePeer(remoteId, iAmOfferer, true, info);
                 }, 8000);
             }
-
             const candRef = ref(db, signalPath(myId, remoteId, "candidates/" + myId, relayOnly));
             pc.onicecandidate = (ev) => { if (ev.candidate) push(candRef, ev.candidate.toJSON()); };
             unsubscribers.push(onChildAdded(ref(db, signalPath(myId, remoteId, "candidates/" + remoteId, relayOnly)), (snap) => {
@@ -731,7 +842,6 @@
                 }));
             }
         }
-
         function teardownPeer(remoteId) {
             const entry = peers.get(remoteId);
             if (!entry) return;
@@ -741,13 +851,11 @@
             document.getElementById("tile-" + remoteId)?.remove();
             layout();
         }
-
         function onPageHide() {
             if (roomId && myId) {
                 remove(ref(db, `rooms/${roomId}/participants/${myId}`));
             }
         }
-
         async function leaveRoom(showLobby) {
             window.removeEventListener("pagehide", onPageHide);
             window.removeEventListener("beforeunload", onPageHide);
@@ -767,16 +875,23 @@
             if (showLobby) {
                 setInCall(false);
                 roomChip.classList.remove("on");
+                await stopShare();
                 if (localStream) {
                     localStream.getTracks().forEach(t => t.stop());
                     localStream = null;
-                    localVideo.srcObject = null;
                 }
+                if (cameraStream) {
+                    cameraStream.getTracks().forEach(t => t.stop());
+                    cameraStream = null;
+                }
+                localVideo.srcObject = null;
                 micOn = true;
                 camOn = true;
-                localTile.classList.remove("cam-off");
+                sharing = false;
+                localTile.classList.remove("cam-off", "sharing");
                 nameInput.value = storeGet(USER_KEY);
                 refreshUserPreview();
+                applyLocalMediaState();
             }
         }
     </script>
