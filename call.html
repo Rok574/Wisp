@@ -499,14 +499,15 @@
         }
         .fx-item.on { border-color: var(--accent); background: #262a3d; }
         .fx-ico { font-size: 22px; display: block; margin-bottom: 4px; }
-        #pipSink, #fxSrc, #fxCanvas {
+        #fxSrc, #fxCanvas {
             position: fixed;
-            left: -10000px;
+            left: 0;
             top: 0;
-            width: 1280px;
-            height: 720px;
-            opacity: 0;
+            width: 360px;
+            height: 480px;
+            opacity: 0.02;
             pointer-events: none;
+            z-index: 0;
         }
         .log { display: none; }
         @media (min-width: 760px) {
@@ -985,8 +986,7 @@
             videosEl.querySelectorAll("video").forEach(playVideo);
             try { await fxSrc.play(); } catch (_) {}
             try { await localVideo.play(); } catch (_) {}
-            if (fxMode !== "off" && !sharing && cameraStream) {
-                fxLastLm = null;
+            if (!sharing && cameraStream) {
                 await startFxPipeline();
                 await pushLocalOutput();
             }
@@ -1024,8 +1024,10 @@
             refreshUserPreview();
         });
         async function attachLocal(stream) {
-            localVideo.srcObject = null;
-            localVideo.srcObject = stream;
+            const cur = localVideo.srcObject;
+            const same = cur && stream && cur.getVideoTracks()[0] && stream.getVideoTracks()[0]
+                && cur.getVideoTracks()[0].id === stream.getVideoTracks()[0].id;
+            if (!same) localVideo.srcObject = stream;
             localVideo.muted = true;
             localVideo.setAttribute("playsinline", "");
             localVideo.setAttribute("webkit-playsinline", "");
@@ -1324,19 +1326,17 @@
             fxCtx.fillStyle = "#0a0c11";
             fxCtx.fillRect(0, 0, cw, ch);
             if (camOn) {
-            try { drawCover(fxCtx, fxSrc, cw, ch); } catch (_) {}
+            const sw = fxSrc.videoWidth || cw;
+            const sh = fxSrc.videoHeight || ch;
+            try { fxCtx.drawImage(fxSrc, 0, 0, cw, ch); } catch (_) {}
             let used = null;
-            if (fxLandmarker && fxSrc.readyState >= 2) {
+            if (fxLandmarker && fxSrc.readyState >= 2 && fxMode !== "off") {
                 try {
                     const res = fxLandmarker.detectForVideo(fxSrc, performance.now());
-                    if (res?.faceLandmarks?.[0]) {
-                        const sw = fxSrc.videoWidth || cw;
-                        const sh = fxSrc.videoHeight || ch;
-                        used = lerpLm(mapLmToCanvas(res.faceLandmarks[0], sw, sh, cw, ch));
-                    }
+                    if (res?.faceLandmarks?.[0]) used = lerpLm(res.faceLandmarks[0]);
                 } catch (_) {}
             }
-            paintFx(used || fxLastLm || fakeLandmarks(cw, ch), cw, ch);
+            if (used) paintFx(used, cw, ch);
             }
             fxRaf = requestAnimationFrame(fxTick);
         }
