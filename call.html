@@ -339,8 +339,8 @@
             border-radius: 14px;
             box-shadow: 0 12px 32px rgba(0,0,0,.45);
         }
-        #videos.focus > .tile.focused.sharing video { object-fit: contain; }
-        #videos.focus > .tile.focused video { object-fit: cover; }
+        #videos.focus > .tile.focused.sharing video,
+        #videos.focus > .tile.focused video { object-fit: contain !important; }
         video {
             position: absolute;
             inset: 0;
@@ -987,13 +987,7 @@
             const v = tile.querySelector("video");
             if (v) playVideo(v);
         }
-        function bindTileFocus(tile) {
-            if (!tile || tile.classList.contains("local")) return;
-            tile.addEventListener("click", (e) => {
-                if (e.target.closest("button")) return;
-                setFocusedTile(tile);
-            });
-        }
+        function bindTileFocus(tile) {}
         function layout() {
             const n = videosEl.children.length;
             const keepFocus = videosEl.classList.contains("focus");
@@ -1870,8 +1864,11 @@
                 if (fxMode !== "off") await startFxPipeline();
                 else fxSrc.srcObject = cameraStream;
                 await pushLocalOutput();
+                localVideo.style.width = "";
+                localVideo.style.height = "";
                 await playVideo(localVideo);
                 applyLocalMediaState();
+                layout();
             } catch (e) {
                 log("Flip failed");
             }
