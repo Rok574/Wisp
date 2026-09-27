@@ -335,7 +335,7 @@
             inset: 0;
             width: 100%;
             height: 100%;
-            object-fit: contain !important;
+            object-fit: cover;
             object-position: center;
             background: #0a0c11;
             display: block;
@@ -1362,7 +1362,7 @@
             if (camOn) {
             const vw = fxSrc.videoWidth || cw;
             const vh = fxSrc.videoHeight || ch;
-            if (vw >= 160 && vh >= 160 && (Math.abs(vw - cw) > 8 || Math.abs(vh - ch) > 8) && !window.__fxResize) {
+            if (vw >= 160 && vh >= 160 && (Math.abs(vw - cw) > 48 || Math.abs(vh - ch) > 48) && !window.__fxResize) {
                 window.__fxResize = true;
                 FX_W = vw;
                 FX_H = vh;
@@ -1374,16 +1374,20 @@
             }
             try { fxCtx.drawImage(fxSrc, 0, 0, fxCanvas.width, fxCanvas.height); } catch (_) {}
             let used = null;
-            if (fxMode !== "off") {
-                if (fxLandmarker && fxSrc.readyState >= 2) {
-                    try {
-                        const res = fxLandmarker.detectForVideo(fxSrc, performance.now());
-                        if (res?.faceLandmarks?.[0]) used = lerpLm(res.faceLandmarks[0]);
-                    } catch (_) {}
-                }
-                if (!used) used = lerpLm(fakeLandmarks(1, 1));
-                paintFx(used, cw, ch);
+            if (fxMode !== "off" && fxLandmarker && fxSrc.readyState >= 2) {
+                try {
+                    const res = fxLandmarker.detectForVideo(fxSrc, performance.now());
+                    if (res?.faceLandmarks?.[0]) {
+                        used = lerpLm(res.faceLandmarks[0]);
+                        window.__fxMiss = 0;
+                    }
+                } catch (_) {}
             }
+            if (!used) {
+                window.__fxMiss = (window.__fxMiss || 0) + 1;
+                fxLastLm = null;
+            }
+            if (used) paintFx(used, cw, ch);
             }
             fxRaf = requestAnimationFrame(fxTick);
         }
@@ -2574,12 +2578,19 @@
         }
         function teardownPeer(remoteId) {
             const entry = peers.get(remoteId);
-            if (!entry) return;
-            entry.unsubscribers.forEach(fn => { try { fn(); } catch (_) {} });
-            try { entry.pc.close(); } catch (_) {}
-            peers.delete(remoteId);
+            if (entry) {
+                entry.unsubscribers.forEach(fn => { try { fn(); } catch (_) {} });
+                try { entry.pc.close(); } catch (_) {}
+                peers.delete(remoteId);
+            }
+            lastPeerInfo.delete(remoteId);
+            pairGenSeen.delete(remoteId);
+            rebuildingIds.delete(remoteId);
             const gone = "tile-" + remoteId;
             document.getElementById(gone)?.remove();
+            document.querySelectorAll("#videos .tile.remote").forEach(t => {
+                if (t.id === gone) t.remove();
+            });
             if (focusedTileId === gone) setFocusedTile(null);
             else layout();
         }
@@ -2618,6 +2629,14 @@
             setChatUnread(0);
             settingsPanel.classList.remove("on");
             [...peers.keys()].forEach(teardownPeer);
+            peers.clear();
+            lastPeerInfo.clear();
+            pairGenSeen.clear();
+            rebuildingIds.clear();
+            document.querySelectorAll("#videos .tile.remote").forEach(t => t.remove());
+            focusedTileId = null;
+            videosEl.classList.remove("focus");
+            layout();
             const leavingRoomId = roomId;
             const leavingUserId = myId;
             if (leavingRoomId && leavingUserId) {
