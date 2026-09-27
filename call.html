@@ -251,7 +251,13 @@
             position: relative;
             min-height: 0;
         }
-        body.in-call #stage { display: block; height: 100%; min-height: 0; }
+        body.in-call #stage {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            height: auto;
+            min-height: 0;
+        }
         #videos {
             height: 100%;
             display: grid;
@@ -290,15 +296,6 @@
             bottom: auto !important;
             box-shadow: none;
         }
-        #videos.one .tile.local,
-        #videos.count-2:not(.focus):not(.many) .tile.remote {
-            justify-self: center;
-            align-self: center;
-            width: min(100%, calc(100dvh * 0.48));
-            height: auto;
-            max-height: calc(100% - 4px);
-            aspect-ratio: var(--ar, 3 / 4);
-        }
         .tile {
             position: relative;
             background: #12141b;
@@ -308,7 +305,11 @@
             min-width: 0;
             border: 1px solid var(--line);
             cursor: pointer;
-            aspect-ratio: var(--ar, auto);
+        }
+        #videos > .tile.remote,
+        #videos.one > .tile.local {
+            width: 100%;
+            height: 100%;
         }
         .tile.focused { cursor: zoom-out; border-color: rgba(109,124,255,.45); }
         #videos.focus {
@@ -338,8 +339,8 @@
             border-radius: 14px;
             box-shadow: 0 12px 32px rgba(0,0,0,.45);
         }
-        #videos.focus > .tile.focused.sharing video,
-        #videos.focus > .tile.focused video { object-fit: contain; }
+        #videos.focus > .tile.focused.sharing video { object-fit: contain; }
+        #videos.focus > .tile.focused video { object-fit: cover; }
         video {
             position: absolute;
             inset: 0;
@@ -967,10 +968,6 @@
         }
         async function playVideo(el) {
             try { await el.play(); } catch (_) {}
-            const tile = el?.closest?.(".tile");
-            const w = el?.videoWidth || 0;
-            const h = el?.videoHeight || 0;
-            if (tile && w > 8 && h > 8) tile.style.setProperty("--ar", w + " / " + h);
         }
         let focusedTileId = null;
         function setFocusedTile(tile) {
@@ -991,7 +988,11 @@
             if (v) playVideo(v);
         }
         function bindTileFocus(tile) {
-            /* tap-to-zoom disabled — it blew the camera up */
+            if (!tile || tile.classList.contains("local")) return;
+            tile.addEventListener("click", (e) => {
+                if (e.target.closest("button")) return;
+                setFocusedTile(tile);
+            });
         }
         function layout() {
             const n = videosEl.children.length;
@@ -1006,7 +1007,7 @@
             if (n >= 5) videosEl.classList.add("many");
             let cols = 1;
             if (n <= 1) cols = 1;
-            else if (n === 2) cols = (window.matchMedia("(orientation: landscape) and (max-height: 520px)").matches) ? 2 : 1;
+            else if (n === 2) cols = 1;
             else if (n <= 4) cols = 2;
             else if (n <= 9) cols = 3;
             else cols = 4;
@@ -1019,12 +1020,6 @@
                 document.querySelectorAll(".tile.focused").forEach(t => t.classList.remove("focused"));
             }
             applyFitMode();
-            document.querySelectorAll("#videos .tile").forEach(tile => {
-                const v = tile.querySelector("video");
-                const w = v?.videoWidth || 0;
-                const h = v?.videoHeight || 0;
-                if (w > 8 && h > 8) tile.style.setProperty("--ar", w + " / " + h);
-            });
         }
         let rotateTimer = 0;
         async function afterRotate() {
