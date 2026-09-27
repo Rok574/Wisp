@@ -290,6 +290,15 @@
             bottom: auto !important;
             box-shadow: none;
         }
+        #videos.one .tile.local,
+        #videos.count-2:not(.focus):not(.many) .tile.remote {
+            justify-self: center;
+            align-self: center;
+            width: min(100%, calc(100dvh * 0.48));
+            height: auto;
+            max-height: calc(100% - 4px);
+            aspect-ratio: var(--ar, 3 / 4);
+        }
         .tile {
             position: relative;
             background: #12141b;
@@ -299,6 +308,7 @@
             min-width: 0;
             border: 1px solid var(--line);
             cursor: pointer;
+            aspect-ratio: var(--ar, auto);
         }
         .tile.focused { cursor: zoom-out; border-color: rgba(109,124,255,.45); }
         #videos.focus {
@@ -335,7 +345,7 @@
             inset: 0;
             width: 100%;
             height: 100%;
-            object-fit: cover;
+            object-fit: contain;
             object-position: center;
             background: #0a0c11;
             display: block;
@@ -955,7 +965,13 @@
             localTile.classList.toggle("back-camera", !sharing && mode === "environment");
             localTile.classList.toggle("sharing", sharing);
         }
-        async function playVideo(el) { try { await el.play(); } catch (_) {} }
+        async function playVideo(el) {
+            try { await el.play(); } catch (_) {}
+            const tile = el?.closest?.(".tile");
+            const w = el?.videoWidth || 0;
+            const h = el?.videoHeight || 0;
+            if (tile && w > 8 && h > 8) tile.style.setProperty("--ar", w + " / " + h);
+        }
         let focusedTileId = null;
         function setFocusedTile(tile) {
             const id = tile?.id || null;
@@ -975,11 +991,7 @@
             if (v) playVideo(v);
         }
         function bindTileFocus(tile) {
-            if (tile.classList.contains("local")) return;
-            tile.addEventListener("click", (e) => {
-                if (e.target.closest("button")) return;
-                setFocusedTile(tile);
-            });
+            /* tap-to-zoom disabled — it blew the camera up */
         }
         function layout() {
             const n = videosEl.children.length;
@@ -1007,6 +1019,12 @@
                 document.querySelectorAll(".tile.focused").forEach(t => t.classList.remove("focused"));
             }
             applyFitMode();
+            document.querySelectorAll("#videos .tile").forEach(tile => {
+                const v = tile.querySelector("video");
+                const w = v?.videoWidth || 0;
+                const h = v?.videoHeight || 0;
+                if (w > 8 && h > 8) tile.style.setProperty("--ar", w + " / " + h);
+            });
         }
         let rotateTimer = 0;
         async function afterRotate() {
@@ -2192,12 +2210,20 @@
             if (!id) return;
             try {
                 await runTransaction(ref(db, `rooms/${id}`), current => {
-                    if (!current) return current;
+                    if (!current) return null;
                     const participants = current.participants || {};
-                    if (Object.keys(participants).length === 0) return null;
+                    const now = Date.now();
+                    const live = Object.keys(participants).filter(k => {
+                        const info = participants[k] || {};
+                        const last = info.seenAt || info.joinedAt || 0;
+                        return last && now - last < STALE_MS;
+                    });
+                    if (live.length === 0) return null;
                     return current;
                 });
-            } catch (_) {}
+            } catch (_) {
+                try { await remove(ref(db, `rooms/${id}`)); } catch (__) {}
+            }
         }
         async function joinRoom(id) {
             id = cleanRoomCode(id);
@@ -2213,6 +2239,7 @@
             watchChat();
             const meRef = ref(db, `rooms/${roomId}/participants/${myId}`);
             try { await onDisconnect(ref(db, `rooms/${roomId}/previews/${myId}`)).remove(); } catch (_) {}
+            try { await onDisconnect(meRef).remove(); } catch (_) {}
             await publishState();
             try {
                 const stem = clientId() + "_";
@@ -2405,7 +2432,7 @@
             v.setAttribute("playsinline", "");
             v.setAttribute("webkit-playsinline", "");
             v.srcObject = remoteStream;
-            v.addEventListener("loadedmetadata", () => playVideo(v));
+            v.addEventListener("loadedmetadata", () => { playVideo(v); layout(); });
             v.addEventListener("canplay", () => playVideo(v));
             v.addEventListener("playing", () => { playVideo(v); setPeerWait(remoteId, false); });
             const badge = document.createElement("div");
