@@ -5,33 +5,39 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="WispRTC">
-    <meta name="theme-color" content="#0b0d12">
+    <meta name="theme-color" content="#0a0d13">
     <title>WispRTC</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg: #0b0d12;
-            --panel: #16181f;
-            --panel-2: #1c1f29;
-            --line: rgba(255,255,255,.08);
-            --text: #f4f6fb;
-            --muted: #9aa3b5;
-            --dim: #6f7890;
-            --accent: #6d7cff;
-            --accent-2: #5460e8;
-            --green: #3dd68c;
-            --red: #f23f42;
+            --bg: #0a0d13;
+            --panel: #13161f;
+            --panel-2: #191d29;
+            --line: rgba(255,255,255,.09);
+            --text: #f4f1ec;
+            --muted: #8d95a8;
+            --dim: #636b7d;
+            --accent: #ff5c72;
+            --accent-2: #e2465d;
+            --green: #34dd97;
+            --red: #f2495e;
+            --font-ui: 'Inter', ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            --font-display: 'Fraunces', Georgia, 'Iowan Old Style', serif;
             --safe-bottom: env(safe-area-inset-bottom, 0px);
             --bar-space: calc(118px + var(--safe-bottom));
         }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); }
         body {
-            font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-family: var(--font-ui);
             min-height: 100dvh;
             display: flex;
             flex-direction: column;
             background:
-                radial-gradient(900px 480px at 50% -20%, rgba(109,124,255,.18), transparent 55%),
+                radial-gradient(760px 420px at 18% -10%, rgba(255,92,114,.15), transparent 60%),
+                radial-gradient(680px 420px at 92% 6%, rgba(52,221,151,.10), transparent 55%),
                 var(--bg);
         }
         body.in-call { background: #0b0d12; overflow: hidden; }
@@ -44,12 +50,12 @@
             flex-shrink: 0;
             z-index: 6;
         }
-        .brand { display: flex; align-items: center; gap: 10px; font-weight: 760; letter-spacing: -.2px; }
+        .brand { display: flex; align-items: center; gap: 10px; font-family: var(--font-display); font-weight: 600; font-size: 17px; letter-spacing: -.2px; }
         .logo {
             width: 32px; height: 32px; border-radius: 10px;
-            background: linear-gradient(180deg, #8b97ff, #5b67f5);
+            background: linear-gradient(160deg, #ff9472, var(--accent) 62%, #d63f56);
             display: grid; place-items: center;
-            box-shadow: 0 8px 20px rgba(91,103,245,.28);
+            box-shadow: 0 8px 20px rgba(255,92,114,.32);
         }
         .logo svg { width: 18px; height: 18px; display: block; }
         .live {
@@ -62,20 +68,6 @@
         }
         .live.on { display: flex; }
         .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
-        .net-tag {
-            font-size: 10px;
-            font-weight: 800;
-            letter-spacing: .4px;
-            text-transform: uppercase;
-            padding: 2px 6px;
-            border-radius: 999px;
-            background: rgba(61,214,140,.16);
-            color: var(--green);
-            margin-left: 6px;
-        }
-        .net-tag:empty { display: none; }
-        .net-tag.relay { background: rgba(109,124,255,.18); color: #9aa8ff; }
-        .net-tag.cell { background: rgba(242,63,66,.16); color: #ff8b8d; }
         .copy, .gear {
             border: 0; background: rgba(255,255,255,.08); color: #fff;
             border-radius: 999px; padding: 6px 11px; font-weight: 650; font-size: 12px;
@@ -106,6 +98,56 @@
             color: #fff;
             font-weight: 700;
         }
+        #settingsPanel select {
+            width: 100%;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            padding: 9px 10px;
+            background: #1c202b;
+            color: #fff;
+            font-size: 13px;
+        }
+        #chatPanel {
+            display: none;
+            position: fixed;
+            right: 12px;
+            bottom: calc(88px + var(--safe-bottom));
+            top: 66px;
+            width: min(320px, calc(100vw - 24px));
+            z-index: 9;
+            background: rgba(19,22,31,.94);
+            border: 1px solid var(--line);
+            backdrop-filter: blur(16px);
+            border-radius: 18px;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        #chatPanel.on { display: flex; }
+        #chatPanel h3 {
+            margin: 0; padding: 12px 14px; font-size: 13px;
+            border-bottom: 1px solid var(--line); color: var(--dim);
+            letter-spacing: .4px; text-transform: uppercase;
+        }
+        #chatLog {
+            flex: 1; overflow-y: auto; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px;
+        }
+        .chat-msg { font-size: 13.5px; line-height: 1.35; }
+        .chat-msg .who { font-weight: 700; margin-right: 6px; }
+        .chat-msg .body { color: var(--text); word-break: break-word; }
+        #chatForm { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--line); }
+        #chatInput {
+            flex: 1; border: 1px solid var(--line); background: var(--panel-2); color: var(--text);
+            border-radius: 999px; padding: 9px 14px; font-size: 14px; outline: none;
+        }
+        #chatSend {
+            border: 0; border-radius: 999px; padding: 0 16px; background: var(--accent); color: #fff; font-weight: 700;
+        }
+        .bar #chatBtn.on { background: var(--accent); }
+        .chat-dot {
+            position: absolute; top: 6px; right: 6px; width: 9px; height: 9px;
+            border-radius: 50%; background: var(--accent); display: none;
+        }
+        .chat-dot.on { display: block; }
         #cellWarn {
             display: none;
             position: fixed;
@@ -147,69 +189,57 @@
         body.in-call #lobbyWrap { display: none; }
         #lobby {
             width: min(440px, 100%);
-            background: var(--panel);
+            background: linear-gradient(180deg, rgba(255,255,255,.03), transparent 40%), var(--panel);
             border: 1px solid var(--line);
-            border-radius: 22px;
-            padding: 28px 24px 22px;
-            box-shadow: 0 24px 80px rgba(0,0,0,.35);
+            border-radius: 24px;
+            padding: 32px 26px 24px;
+            box-shadow: 0 30px 90px rgba(0,0,0,.4), 0 0 0 1px rgba(255,255,255,.02) inset;
+            position: relative;
         }
-        #lobby h2 { margin: 0 0 8px; font-size: 26px; letter-spacing: -.4px; }
-        #lobby p { margin: 0 0 8px; color: var(--muted); font-size: 14px; line-height: 1.45; }
+        #lobby h2 {
+            margin: 0 0 8px;
+            font-family: var(--font-display);
+            font-weight: 600;
+            font-size: 30px;
+            letter-spacing: -.3px;
+            color: var(--text);
+        }
+        #lobby p { margin: 0 0 8px; color: var(--muted); font-size: 14.5px; line-height: 1.5; }
         label {
-            display: block; font-size: 11px; font-weight: 750;
-            letter-spacing: .5px; color: var(--dim);
-            margin: 16px 0 8px; text-transform: uppercase;
+            display: block; font-size: 13px; font-weight: 600;
+            letter-spacing: 0; color: var(--muted);
+            margin: 18px 0 8px;
         }
         #lobby input {
             width: 100%; padding: 14px 14px; border: 1px solid var(--line);
             border-radius: 12px; background: var(--panel-2); color: var(--text);
             font-size: 16px; outline: none;
+            box-shadow: inset 0 1px 2px rgba(0,0,0,.25);
+            transition: border-color .15s ease, box-shadow .15s ease;
         }
-        #lobby input:focus { border-color: var(--accent); }
-        .actions { display: flex; gap: 10px; margin-top: 20px; }
+        #lobby input:focus {
+            border-color: var(--accent);
+            box-shadow: inset 0 1px 2px rgba(0,0,0,.25), 0 0 0 3px rgba(255,92,114,.16);
+        }
+        #lobby input::placeholder { color: var(--dim); }
+        .actions { display: flex; gap: 10px; margin-top: 22px; }
         .actions button {
-            flex: 1; border: 0; border-radius: 12px; padding: 13px 10px;
-            font-weight: 750; font-size: 15px; color: #fff;
+            flex: 1; border: 0; border-radius: 12px; padding: 14px 10px;
+            font-weight: 700; font-size: 15px; color: #fff;
+            transition: transform .1s ease, filter .15s ease;
         }
-        .go { background: var(--accent); }
-        .go:active { background: var(--accent-2); }
-        .ghost { background: #2a2e3a; }
+        .actions button:active { transform: scale(.97); }
+        .go {
+            background: linear-gradient(160deg, #ff8264, var(--accent) 65%);
+            box-shadow: 0 10px 24px rgba(255,92,114,.32);
+        }
+        .go:active { filter: brightness(.92); box-shadow: 0 6px 16px rgba(255,92,114,.28); }
+        .ghost { background: var(--panel-2); border: 1px solid var(--line); color: var(--text); }
+        .ghost:active { background: #20242f; }
         .user-row {
             display: flex; align-items: center; gap: 10px;
             margin-top: 16px; color: var(--muted); font-size: 13px;
         }
-        .school-row {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            margin-top: 14px;
-            padding: 12px 14px;
-            border: 1px solid var(--line);
-            background: var(--panel-2);
-            border-radius: 14px;
-            color: var(--muted);
-            font-size: 13px;
-            line-height: 1.35;
-            text-transform: none;
-            letter-spacing: 0;
-            font-weight: 500;
-        }
-        .school-row .school-copy { min-width: 0; flex: 1; }
-        .school-row strong { color: var(--text); display: block; font-size: 14px; margin-bottom: 2px; }
-        .school-row input { position: absolute; opacity: 0; pointer-events: none; }
-        .switch {
-            width: 44px; height: 26px; border-radius: 999px;
-            background: #3a4050; position: relative; flex-shrink: 0;
-        }
-        .switch::after {
-            content: "";
-            position: absolute; top: 3px; left: 3px;
-            width: 20px; height: 20px; border-radius: 50%;
-            background: #fff; transition: transform .18s ease;
-        }
-        #schoolMode:checked + .switch { background: var(--accent); }
-        #schoolMode:checked + .switch::after { transform: translateX(18px); }
         .ava {
             width: 28px; height: 28px; border-radius: 50%;
             display: grid; place-items: center; font-weight: 800; color: #fff; font-size: 12px;
@@ -299,21 +329,24 @@
             box-shadow: 0 12px 32px rgba(0,0,0,.45);
         }
         #videos.focus > .tile.focused.sharing video,
-        #videos.focus > .tile.focused.fit video { object-fit: contain; }
+        #videos.focus > .tile.focused video { object-fit: contain; }
         video {
             position: absolute;
             inset: 0;
             width: 100%;
             height: 100%;
-            object-fit: cover !important;
+            object-fit: contain !important;
             object-position: center;
             background: #0a0c11;
             display: block;
         }
-        .tile.fit video { object-fit: contain !important; }
         .tile.sharing video { object-fit: contain !important; }
-        .tile video { object-fit: contain !important; }
         .tile.local video { transform: scaleX(-1); }
+        .tile.local.sharing video,
+        .tile.remote.sharing video {
+            object-fit: contain !important;
+            background: #0a0c11;
+        }
         .tile.remote.front-cam video { transform: scaleX(-1); }
         .tile.local.back-camera video,
         .tile.local.sharing video,
@@ -373,10 +406,7 @@
         }
         @keyframes spin { to { transform: rotate(360deg); } }
         .cam-off-badge .ava { width: 72px; height: 72px; font-size: 26px; }
-        .tile .tile-btns { display: none !important; }
         .tile.local .label { display: none !important; }
-        .tile .micdot { display: none !important; }
-        .tile .label ~ .label { display: none !important; }
         .label {
             position: absolute; left: 12px; bottom: 12px;
             font-size: 13px; font-weight: 700;
@@ -394,9 +424,11 @@
         .micdot.off { background: var(--red); }
         .tile-btns { position: absolute; right: 12px; bottom: 12px; display: flex; gap: 6px; z-index: 2; }
         .tile-btns button {
-            height: 32px; padding: 0 10px; border: 0; border-radius: 999px;
+            height: 32px; min-width: 32px; padding: 0 8px; border: 0; border-radius: 999px;
             background: rgba(10,12,18,.72); color: #fff; font-size: 12px; font-weight: 700;
+            display: grid; place-items: center;
         }
+        .tile-btns button svg { width: 16px; height: 16px; display: block; }
         .tile-btns button.on { background: var(--red); }
         .share-pill {
             display: none;
@@ -406,6 +438,16 @@
             padding: 5px 10px; border-radius: 999px; z-index: 2;
         }
         .tile.sharing .share-pill { display: block; }
+        #shareRotBtn {
+            display: none;
+            position: absolute; top: 12px; left: 148px;
+            z-index: 3;
+            height: 26px; padding: 0 10px;
+            border: 0; border-radius: 999px;
+            background: rgba(10,12,18,.78); color: #fff;
+            font-size: 11px; font-weight: 800;
+        }
+        .tile.sharing #shareRotBtn { display: block; }
         .tile.sharing video { object-fit: contain !important; }
         @media (min-width: 760px) {
             #videos.count-2 { grid-template-columns: 1fr; padding-right: 16px; }
@@ -438,26 +480,40 @@
             position: fixed; left: 50%; bottom: calc(16px + var(--safe-bottom));
             transform: translateX(-50%);
             display: none;
-            align-items: center; gap: 8px;
-            padding: 10px 12px;
+            align-items: center; gap: 6px;
+            padding: 8px 10px;
             background: rgba(22,24,31,.86);
             border: 1px solid var(--line);
             backdrop-filter: blur(16px);
             border-radius: 999px;
             z-index: 8;
-            max-width: calc(100vw - 16px);
+            max-width: calc(100vw - 12px);
             overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
         }
         body.in-call .bar { display: flex; }
         .bar button {
-            width: 48px; height: 48px; border: 0; border-radius: 50%;
-            background: #2a2e3a; color: #fff; font-size: 10px; font-weight: 750;
+            width: 42px; height: 42px; border: 1px solid rgba(255,255,255,.06); border-radius: 50%;
+            background: #1c202b; color: #fff;
             flex-shrink: 0;
+            display: grid; place-items: center;
+            padding: 0;
+            transition: transform .1s ease, background .15s ease;
         }
-        .bar button.on { background: var(--red); }
+        .bar button svg { width: 20px; height: 20px; display: block; pointer-events: none; }
+        .bar button:active { transform: scale(.94); }
+        .bar button.on { background: var(--red); border-color: transparent; }
         .bar #shareBtn.on { background: var(--accent); }
-        .bar #fxBtn.on { background: var(--accent); }
-        .bar #hangup { background: var(--red); width: 56px; }
+        .bar #fxBtn.on, .bar #chatBtn.on { background: #32364a; border-color: rgba(255,92,114,.4); }
+        .bar #fsBtn.on { background: #2a3144; }
+        .bar #hangup { background: var(--red); border-color: transparent; width: 42px; }
+        .bar #hangup svg { transform: rotate(135deg); }
+        @media (max-width: 430px) {
+            .bar { gap: 4px; padding: 7px 8px; }
+            .bar button { width: 38px; height: 38px; }
+            .bar button svg { width: 18px; height: 18px; }
+            .bar #hangup { width: 38px; }
+        }
         #fxPanel {
             display: none;
             position: fixed;
@@ -546,7 +602,6 @@
             #lobby > div[style] { display: none; }
             #lobby .actions { grid-column: 1 / -1; margin-top: 10px; }
             #lobby .user-row { grid-column: 1 / -1; margin-top: 8px; }
-            #lobby .school-row { grid-column: 1 / -1; margin-top: 10px; }
             #videos {
                 padding: 2px 76px 4px max(6px, env(safe-area-inset-left));
                 gap: 8px;
@@ -604,6 +659,12 @@
                 transform: translateY(-50%);
                 width: min(300px, calc(100vw - 90px));
             }
+            #chatPanel {
+                right: calc(58px + env(safe-area-inset-right, 0px));
+                top: 36px;
+                bottom: 8px;
+                width: min(280px, calc(100vw - 90px));
+            }
             .fx-grid { grid-template-columns: repeat(3, 1fr); }
         }
     </style>
@@ -624,7 +685,14 @@
             <span class="dot"></span>
             <span id="roomLabel">room</span>
             <button id="copyBtn" class="copy" type="button">Copy</button>
+            <button id="gearBtn" class="gear" type="button" title="Settings">⚙</button>
         </div>
+    </div>
+    <div id="settingsPanel">
+        <h3>Camera</h3>
+        <select id="camSelect"></select>
+        <h3 style="margin-top:10px;">Microphone</h3>
+        <select id="micSelect"></select>
     </div>
     <div id="httpsWarn">iPhone and iPad need HTTPS for camera and mic.</div>
     <div id="cellWarn">
@@ -651,7 +719,6 @@
                 <div class="ava" id="previewAva">?</div>
                 <span id="savedHint">No saved username yet</span>
             </div>
-            
         </div>
     </div>
     <div id="stage">
@@ -659,24 +726,32 @@
             <div class="tile local" id="localTile">
                 <video id="localVideo" autoplay playsinline webkit-playsinline muted></video>
                 <div class="share-pill">Sharing screen</div>
+                <button id="shareRotBtn" type="button" title="Rotate share">Rotate</button>
                 <div class="cam-off-badge">
                     <div class="ava" id="localAva">Y</div>
                     Camera off
                 </div>
-                <div class="label"><span class="micdot" id="localMicDot"></span><span id="localName">You</span><span class="net-tag" id="localNetTag"></span></div>
-                <div class="tile-btns">
-                    <button id="fitBtn" type="button">Fit</button>
-                </div>
+                <div class="label"><span class="micdot" id="localMicDot"></span><span id="localName">You</span></div>
             </div>
         </div>
     </div>
     <div class="bar" id="callBar">
-        <button id="muteBtn" type="button">Mute</button>
-        <button id="camBtn" type="button">Video</button>
-        <button id="flipBtn" type="button">Flip</button>
-        <button id="shareBtn" type="button">Share</button>
-        <button id="fxBtn" type="button">FX</button>
-        <button id="hangup" type="button">Leave</button>
+        <button id="muteBtn" type="button" title="Mute microphone" aria-label="Mute"></button>
+        <button id="camBtn" type="button" title="Toggle camera" aria-label="Camera"></button>
+        <button id="flipBtn" type="button" title="Flip camera" aria-label="Flip camera"></button>
+        <button id="shareBtn" type="button" title="Share screen" aria-label="Share screen"></button>
+        <button id="fxBtn" type="button" title="Effects" aria-label="Effects"></button>
+        <button id="chatBtn" type="button" style="position:relative;" title="Chat" aria-label="Chat"><span class="chat-dot" id="chatDot"></span></button>
+        <button id="fsBtn" type="button" title="Fullscreen" aria-label="Fullscreen"></button>
+        <button id="hangup" type="button" title="Leave" aria-label="Leave"></button>
+    </div>
+    <div id="chatPanel">
+        <h3>Chat</h3>
+        <div id="chatLog"></div>
+        <form id="chatForm">
+            <input id="chatInput" type="text" placeholder="Message" maxlength="500" autocomplete="off">
+            <button id="chatSend" type="submit">Send</button>
+        </form>
     </div>
     <div id="fxPanel">
         <h3>Effects</h3>
@@ -708,8 +783,6 @@
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
         const USER_KEY = "wisprtc.username";
-        const SCHOOL_KEY = "wisprtc.school";
-        const FIT_KEY = "wisprtc.fill";
         const CLIENT_KEY = "wisprtc.clientId";
         const STALE_MS = 720000;
         const COLORS = ["#6d7cff","#3dd68c","#f5c542","#eb459e","#f23f42","#00a8fc","#f26522","#b57bff"];
@@ -726,23 +799,14 @@
                         "turn:openrelay.metered.ca:80",
                         "turn:openrelay.metered.ca:80?transport=tcp",
                         "turn:openrelay.metered.ca:443?transport=tcp",
-                        "turns:openrelay.metered.ca:443",
-                        "turn:openrelay.metered.ca:443?transport=tcp"
+                        "turns:openrelay.metered.ca:443"
                     ],
                     username: "openrelayproject",
                     credential: "openrelayproject"
                 },
                 ...EXTRA_TURN
             ],
-            iceCandidatePoolSize: 2
-        };
-        const iceRelayOnly = {
-            iceServers: iceConfig.iceServers.filter(s => {
-                const list = [].concat(s.urls || []);
-                return list.some(x => String(x).startsWith("turn"));
-            }),
-            iceTransportPolicy: "relay",
-            iceCandidatePoolSize: 2
+            iceCandidatePoolSize: 4
         };
         function onCellular() {
             const c = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
@@ -750,68 +814,13 @@
             if (c?.effectiveType && /2g|3g/.test(c.effectiveType) && c.type !== "wifi") return true;
             return false;
         }
-        function sameLan(info) {
-            return !!(info && info.net && myNetHash && info.net === myNetHash);
-        }
-        function setNetTag(el, kind) {
-            if (!el) return;
-            if (!kind) { el.textContent = ""; el.className = "net-tag"; return; }
-            el.textContent = kind;
-            el.className = "net-tag" + (kind === "Relay" ? " relay" : kind === "Cellular" ? " cell" : "");
-        }
-        function refreshNetBadge() {
-            const localTag = document.getElementById("localNetTag");
-            const remotes = [...document.querySelectorAll(".tile.remote")];
-            setNetTag(localTag, "");
-            if (!remotes.length) return;
-            remotes.forEach(t => {
-                const tag = t.querySelector(".net-tag");
-                const kind = t.classList.contains("same-net") ? "LAN" : "Relay";
-                setNetTag(tag, kind);
-            });
-            const lan = remotes.filter(t => t.classList.contains("same-net")).length;
-            const other = remotes.length - lan;
-            setNetTag(localTag, "");
-        }
-        function schoolOn() {
-            return false;
-        }
-        async function hashText(s) {
-            const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("wisprtc-net|" + s));
-            return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("").slice(0, 12);
-        }
-        async function detectNetHash() {
-            let ip = "";
-            try {
-                const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
-                pc.createDataChannel("n");
-                await new Promise(resolve => {
-                    const t = setTimeout(resolve, 1200);
-                    pc.onicecandidate = ev => {
-                        if (!ev.candidate) {
-                            clearTimeout(t);
-                            resolve();
-                            return;
-                        }
-                        const c = ev.candidate;
-                        const typ = c.type || (c.candidate || "").split(" typ ")[1]?.split(" ")[0];
-                        if (typ === "srflx") {
-                            const m = (c.candidate || "").match(/([0-9]{1,3}(?:\.[0-9]{1,3}){3})/);
-                            if (m) ip = m[1];
-                        }
-                    };
-                    pc.createOffer().then(o => pc.setLocalDescription(o));
-                });
-                pc.close();
-            } catch (_) {}
-            myNetHash = ip ? await hashText(ip) : "";
-            return myNetHash;
-        }
         function iceForCall(forceRelay, info) {
             return {
                 iceServers: iceConfig.iceServers,
+                // Always allow host/srflx so same-WiFi LAN still works.
+                // TURN stays in the list for when peers are on different networks.
                 iceTransportPolicy: forceRelay ? "relay" : "all",
-                iceCandidatePoolSize: 2
+                iceCandidatePoolSize: 4
             };
         }
         const videosEl = document.getElementById("videos");
@@ -827,17 +836,27 @@
         const flipBtn = document.getElementById("flipBtn");
         const shareBtn = document.getElementById("shareBtn");
         const fxBtn = document.getElementById("fxBtn");
-        const pipBtn = null;
         const fxPanel = document.getElementById("fxPanel");
         const fxSrc = document.getElementById("fxSrc");
         const fxCanvas = document.getElementById("fxCanvas");
         const fxCtx = fxCanvas.getContext("2d", { willReadFrequently: true });
-        const fitBtn = document.getElementById("fitBtn");
         const statusLog = document.getElementById("statusLog");
         const previewAva = document.getElementById("previewAva");
         const savedHint = document.getElementById("savedHint");
         const localAva = document.getElementById("localAva");
         const localMicDot = document.getElementById("localMicDot");
+        const gearBtn = document.getElementById("gearBtn");
+        const settingsPanel = document.getElementById("settingsPanel");
+        const camSelect = document.getElementById("camSelect");
+        const micSelect = document.getElementById("micSelect");
+        const chatBtn = document.getElementById("chatBtn");
+        const chatPanel = document.getElementById("chatPanel");
+        const chatLog = document.getElementById("chatLog");
+        const chatForm = document.getElementById("chatForm");
+        const chatInput = document.getElementById("chatInput");
+        const chatDot = document.getElementById("chatDot");
+        const fsBtn = document.getElementById("fsBtn");
+        const hangup = document.getElementById("hangup");
         if (!window.isSecureContext) document.getElementById("httpsWarn").style.display = "block";
         let localStream = null;
         let cameraStream = null;
@@ -849,13 +868,31 @@
         let micOn = true;
         let camOn = true;
         let sharing = false;
+        let shareRot = 0;
+        let shareRaf = 0;
+        const shareCanvas = document.createElement("canvas");
+        const shareCtx = shareCanvas.getContext("2d");
+        let shareDrawSrc = null;
+        let shareOutStream = null;
         let fxMode = "off";
         let fxLandmarker = null;
         let fxRaf = 0;
         let fxStream = null;
         let fxLastLm = null;
         let fxReady = false;
-        let fillMode = false;
+        const ICO_MIC = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3.2 3.2 0 0 1 3.2 3.2v6.6a3.2 3.2 0 1 1-6.4 0V5.2A3.2 3.2 0 0 1 12 2z"/><path d="M19 11a7 7 0 0 1-14 0"/><path d="M12 18v3M9 21h6"/></svg>`;
+        const ICO_MIC_OFF = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3.2 3.2 0 0 1 3.2 3.2v6.6a3.2 3.2 0 0 1-.4 1.5"/><path d="M8.8 8.8V5.2A3.2 3.2 0 0 1 12 2"/><path d="M5 11a7 7 0 0 0 11.2 5.6"/><path d="M19 11a7 7 0 0 1-.4 2.3"/><path d="M12 18v3M9 21h6"/><path d="M4 4l16 16"/></svg>`;
+        const ICO_CAM = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6.5" width="13.5" height="11" rx="2.2"/><path d="M16 10l5.2-2.4c.5-.2 1 .1 1 .7v7.4c0 .6-.5.9-1 .7L16 14"/></svg>`;
+        const ICO_CAM_OFF = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 10l5.2-2.4c.5-.2 1 .1 1 .7v7.4c0 .6-.5.9-1 .7L16 14"/><path d="M3 7.2A2.2 2.2 0 0 1 5.2 6.5H12"/><path d="M3 9.5v6.8A2.2 2.2 0 0 0 5.2 18.5h8.2"/><path d="M4 4l16 16"/></svg>`;
+        const ICO_FLIP = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a4 4 0 0 1 4-4h7"/><path d="M10 2l4 2-4 2"/><path d="M21 16a4 4 0 0 1-4 4H10"/><path d="M14 22l-4-2 4-2"/><circle cx="12" cy="12" r="2.2"/></svg>`;
+        const ICO_SHARE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12.5" rx="2"/><path d="M8 20h8"/><path d="M12 16.5V20"/></svg>`;
+        const ICO_SHARE_STOP = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12.5" rx="2"/><path d="M9 8.2l6 6M15 8.2l-6 6"/></svg>`;
+        const ICO_FX = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.2 3.6L17 8l-3.8 1.4L12 13l-1.2-3.6L7 8l3.8-1.4z"/><path d="M18.5 14.2l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/></svg>`;
+        const ICO_CHAT = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 11.5a7.5 7.5 0 0 1-7.2 7.5H8.2L4 21.5V12A7.5 7.5 0 1 1 20.5 11.5z"/></svg>`;
+        const ICO_FS = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4H4v4M16 4h4v4M8 20H4v-4M16 20h4v-4"/></svg>`;
+        const ICO_LEAVE = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6.62 10.79c1.44 2.83 3.76 5.15 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1C9.61 21 2 13.39 2 4c0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg>`;
+        const ICO_HEAR = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 6a8.5 8.5 0 0 1 0 12"/></svg>`;
+        const ICO_MUTE_THEM = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H3v6h3l5 4V5z"/><path d="M22 9l-6 6M16 9l6 6"/></svg>`;
         const peers = new Map();
         let participantsUnsub = null;
         let removedUnsub = null;
@@ -865,9 +902,13 @@
         let reconnectTimer = null;
         let previewTimer = null;
         let previewUnsub = null;
-        let myNetHash = "";
         let callGen = 0;
-        const peerGen = new Map();
+        let chatUnsub = null;
+        let chatOpen = false;
+        let unreadChat = 0;
+        const pairGenSeen = new Map();
+        const rebuildingIds = new Set();
+        const lastPeerInfo = new Map();
         let netDown = false;
         const previewCanvas = document.createElement("canvas");
         function storeGet(key) {
@@ -902,12 +943,7 @@
                 .slice(0, 32)
                 .toUpperCase();
         }
-        function applyFitMode() {
-            document.querySelectorAll(".tile").forEach(t => {
-                t.classList.remove("fit");
-                t.classList.add("fill");
-            });
-        }
+        function applyFitMode() {}
         function syncCameraMirror() {
             const track = localStream?.getVideoTracks?.()[0];
             const mode = track?.getSettings?.().facingMode || facing;
@@ -973,6 +1009,7 @@
             videosEl.querySelectorAll("video").forEach(playVideo);
             try { await fxSrc.play(); } catch (_) {}
             try { await localVideo.play(); } catch (_) {}
+            if (sharing) applySharePreview();
             if (!sharing && cameraStream) {
                 await startFxPipeline();
                 await pushLocalOutput();
@@ -998,10 +1035,8 @@
         }
         nameInput.value = storeGet(USER_KEY);
         refreshUserPreview();
-        detectNetHash().catch(() => {});
-        
-        applyFitMode();
         bindTileFocus(localTile);
+        paintBarIcons();
         document.addEventListener("keydown", (e) => {
             if (e.key === "Escape" && focusedTileId) setFocusedTile(null);
         });
@@ -1031,16 +1066,15 @@
             });
             await playVideo(localVideo);
         }
-        async function getMedia(face = facing) {
+        async function getMedia(face = facing, videoOnly = false) {
             if (!navigator.mediaDevices?.getUserMedia) {
                 throw new Error("Need HTTPS for camera on iPhone/iPad");
             }
-            const audio = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+            const audio = videoOnly ? false : { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
             const tries = [
-                { video: { facingMode: { exact: face } }, audio },
-                { video: { facingMode: { ideal: face } }, audio },
+                { video: { facingMode: { ideal: face }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio },
                 { video: { facingMode: face }, audio },
-                { video: true, audio: true }
+                { video: true, audio }
             ];
             let last;
             for (const c of tries) {
@@ -1049,11 +1083,16 @@
             }
             throw last;
         }
+        function resetFxOutput() {
+            stopFxLoop();
+            try { fxStream?.getTracks().forEach(t => t.stop()); } catch (_) {}
+            fxStream = null;
+            FX_W = 0;
+            FX_H = 0;
+            fxLastLm = null;
+        }
         async function replaceOutgoingVideo(track) {
             for (const { pc } of peers.values()) {
-                const sender = pc.getSenders().find(s => s.track && s.track.kind === "video")
-                    || pc.getSenders().find(s => s.track == null && s.track === null);
-                const videoSender = pc.getSenders().find(s => (s.track && s.track.kind === "video") || s.track == null);
                 const s = pc.getSenders().find(x => x.track?.kind === "video") || pc.getSenders().find(x => !x.track);
                 if (s && track) {
                     try { await s.replaceTrack(track); } catch (_) {}
@@ -1075,17 +1114,6 @@
         }
         function lmPt(lm, i, w, h) {
             return { x: lm[i].x * w, y: lm[i].y * h };
-        }
-        function mapLmToCanvas(lm, sw, sh, cw, ch) {
-            if (!lm || !sw || !sh) return lm;
-            const scale = Math.max(cw / sw, ch / sh);
-            const ox = (cw - sw * scale) / 2;
-            const oy = (ch - sh * scale) / 2;
-            return lm.map(p => ({
-                x: (p.x * sw * scale + ox) / cw,
-                y: (p.y * sh * scale + oy) / ch,
-                z: p.z
-            }));
         }
         function lerpLm(lm) {
             if (!fxLastLm || fxLastLm.length !== lm.length) {
@@ -1128,7 +1156,6 @@
             ctx.fill();
             ctx.restore();
         }
-        function roundedLens() {}
         function drawGlasses(ctx, lm, w, h) {
             const lOuter = lmPt(lm, 33, w, h);
             const lInner = lmPt(lm, 133, w, h);
@@ -1222,13 +1249,13 @@
             const ulen = Math.hypot(upx, upy) || 1;
             const ux = upx / ulen, uy = upy / ulen;
             const px = -uy, py = ux;
-            const earH = ulen * 0.46;
-            const earW = ulen * 0.20;
             function ear(anchor, dir) {
                 const base = {
                     x: top.x + px * dir * ulen * 0.26 + ux * ulen * 0.06,
                     y: top.y + py * dir * ulen * 0.26 + uy * ulen * 0.06
                 };
+                const earH = ulen * 0.46;
+                const earW = ulen * 0.20;
                 const tip = {
                     x: base.x + ux * earH + px * dir * earW * 0.55,
                     y: base.y + uy * earH + py * dir * earW * 0.55
@@ -1253,31 +1280,6 @@
             }
             ear(lBrow, -1);
             ear(rBrow, 1);
-        }
-        function blurFaceExcept(ctx, w, h, lm) {
-            const small = document.createElement("canvas");
-            const sw = Math.max(40, Math.round(w / 8));
-            const sh = Math.max(24, Math.round(h / 8));
-            small.width = sw;
-            small.height = sh;
-            const sctx = small.getContext("2d");
-            sctx.filter = "blur(8px)";
-            sctx.drawImage(fxCanvas, 0, 0, sw, sh);
-            ctx.drawImage(small, 0, 0, w, h);
-            const top = lmPt(lm, 10, w, h);
-            const chin = lmPt(lm, 152, w, h);
-            const left = lmPt(lm, 234, w, h);
-            const right = lmPt(lm, 454, w, h);
-            const cx = (left.x + right.x) / 2;
-            const cy = (top.y + chin.y) / 2;
-            const rx = Math.hypot(right.x - left.x, right.y - left.y) * 0.62;
-            const ry = Math.hypot(chin.x - top.x, chin.y - top.y) * 0.58;
-            ctx.save();
-            ctx.beginPath();
-            ctx.ellipse(cx, cy, rx, ry, Math.atan2(right.y - left.y, right.x - left.x), 0, Math.PI * 2);
-            ctx.clip();
-            ctx.drawImage(fxSrc, 0, 0, w, h);
-            ctx.restore();
         }
         function fakeLandmarks(w, h) {
             const cx = 0.5, cy = 0.45, fw = 0.22, fh = 0.28;
@@ -1353,8 +1355,6 @@
             fxCtx.fillStyle = "#0a0c11";
             fxCtx.fillRect(0, 0, cw, ch);
             if (camOn) {
-            const sw = fxSrc.videoWidth || cw;
-            const sh = fxSrc.videoHeight || ch;
             const vw = fxSrc.videoWidth || cw;
             const vh = fxSrc.videoHeight || ch;
             if (vw >= 160 && vh >= 160 && (Math.abs(vw - cw) > 8 || Math.abs(vh - ch) > 8) && !window.__fxResize) {
@@ -1369,13 +1369,16 @@
             }
             try { fxCtx.drawImage(fxSrc, 0, 0, fxCanvas.width, fxCanvas.height); } catch (_) {}
             let used = null;
-            if (fxLandmarker && fxSrc.readyState >= 2 && fxMode !== "off") {
-                try {
-                    const res = fxLandmarker.detectForVideo(fxSrc, performance.now());
-                    if (res?.faceLandmarks?.[0]) used = lerpLm(res.faceLandmarks[0]);
-                } catch (_) {}
+            if (fxMode !== "off") {
+                if (fxLandmarker && fxSrc.readyState >= 2) {
+                    try {
+                        const res = fxLandmarker.detectForVideo(fxSrc, performance.now());
+                        if (res?.faceLandmarks?.[0]) used = lerpLm(res.faceLandmarks[0]);
+                    } catch (_) {}
+                }
+                if (!used) used = lerpLm(fakeLandmarks(1, 1));
+                paintFx(used, cw, ch);
             }
-            if (used) paintFx(used, cw, ch);
             }
             fxRaf = requestAnimationFrame(fxTick);
         }
@@ -1407,7 +1410,9 @@
         }
         function outgoingVideoTrack() {
             if (sharing) return screenStream?.getVideoTracks?.()[0];
-            if (fxStream?.getVideoTracks?.()[0]?.readyState === "live") return fxStream.getVideoTracks()[0];
+            if (fxMode !== "off" && fxStream?.getVideoTracks?.()[0]?.readyState === "live") {
+                return fxStream.getVideoTracks()[0];
+            }
             return cameraStream?.getVideoTracks?.()[0] || localStream?.getVideoTracks?.()[0];
         }
         async function pushLocalOutput() {
@@ -1437,37 +1442,52 @@
             fxBtn.classList.toggle("on", fxMode !== "off" || fxPanel.classList.contains("on"));
             if (sharing) return;
             fxLastLm = null;
-            if (fxMode !== "off") {
-                try { await loadFaceModel(); } catch (_) {}
-            }
-            if (!fxStream || fxStream.getVideoTracks().every(t => t.readyState !== "live")) {
-                try {
+            try {
+                if (fxMode !== "off") {
+                    try { await loadFaceModel(); } catch (err) { log("Face track fallback"); }
+                    resetFxOutput();
                     await startFxPipeline();
-                    await pushLocalOutput();
-                } catch (err) {
-                    console.error(err);
-                    log("Effects failed");
+                } else {
+                    resetFxOutput();
                 }
+                await pushLocalOutput();
+            } catch (err) {
+                console.error(err);
+                log("Effects failed");
             }
         });
+        function paintBarIcons() {
+            muteBtn.classList.toggle("on", !micOn);
+            muteBtn.innerHTML = micOn ? ICO_MIC : ICO_MIC_OFF;
+            muteBtn.title = micOn ? "Mute microphone" : "Unmute microphone";
+            camBtn.classList.toggle("on", !camOn);
+            camBtn.innerHTML = camOn ? ICO_CAM : ICO_CAM_OFF;
+            camBtn.title = camOn ? "Turn camera off" : "Turn camera on";
+            shareBtn.classList.toggle("on", sharing);
+            shareBtn.innerHTML = sharing ? ICO_SHARE_STOP : ICO_SHARE;
+            shareBtn.title = sharing ? "Stop sharing" : "Share screen";
+            flipBtn.innerHTML = ICO_FLIP;
+            fxBtn.innerHTML = ICO_FX;
+            const chatKeep = chatDot;
+            chatBtn.innerHTML = ICO_CHAT;
+            if (chatKeep) chatBtn.appendChild(chatKeep);
+            fsBtn.innerHTML = ICO_FS;
+            hangup.innerHTML = ICO_LEAVE;
+            flipBtn.disabled = sharing || !camOn;
+            flipBtn.style.opacity = (sharing || !camOn) ? ".45" : "1";
+        }
         function applyLocalMediaState() {
-            if (!localStream) return;
-            localStream.getAudioTracks().forEach(t => t.enabled = micOn);
+            if (localStream) {
+                localStream.getAudioTracks().forEach(t => t.enabled = micOn);
+            }
             if (!sharing) {
                 cameraStream?.getAudioTracks?.().forEach(t => t.enabled = micOn);
-                if (camOn) cameraStream?.getVideoTracks?.().forEach(t => t.enabled = true);
+                cameraStream?.getVideoTracks?.().forEach(t => { t.enabled = camOn; });
                 if (fxStream) fxStream.getVideoTracks().forEach(t => t.enabled = camOn);
             }
             localTile.classList.toggle("cam-off", !camOn && !sharing);
             localMicDot.classList.toggle("off", !micOn);
-            muteBtn.classList.toggle("on", !micOn);
-            muteBtn.textContent = micOn ? "Mute" : "Unmute";
-            camBtn.classList.toggle("on", !camOn);
-            camBtn.textContent = camOn ? "Video" : "Cam off";
-            shareBtn.classList.toggle("on", sharing);
-            shareBtn.textContent = sharing ? "Stop" : "Share";
-            flipBtn.disabled = sharing;
-            flipBtn.style.opacity = sharing ? ".45" : "1";
+            paintBarIcons();
             syncCameraMirror();
             publishState();
         }
@@ -1477,7 +1497,6 @@
                 await set(ref(db, `rooms/${roomId}/participants/${myId}`), {
                     name: displayName, micOn, camOn, sharing,
                     front: facing !== "environment",
-                    net: myNetHash || "",
                     joinedAt: Date.now(),
                     seenAt: Date.now(),
                     gen: callGen
@@ -1556,20 +1575,67 @@
             const [x, y] = myId < remoteId ? [myId, remoteId] : [remoteId, myId];
             try { await remove(ref(db, `rooms/${roomId}/signals/${x}_${y}`)); } catch (_) {}
         }
+        function pairKey(remoteId) {
+            return myId < remoteId ? `${myId}_${remoteId}` : `${remoteId}_${myId}`;
+        }
+        function pairGenRef(remoteId) {
+            return ref(db, `rooms/${roomId}/signals/${pairKey(remoteId)}/gen`);
+        }
+        async function bumpPairGen(remoteId) {
+            if (!roomId || !myId) return null;
+            try {
+                const res = await runTransaction(pairGenRef(remoteId), cur => (cur || 0) + 1);
+                const g = res?.snapshot?.val();
+                if (g != null) pairGenSeen.set(remoteId, g);
+                return g;
+            } catch (_) { return null; }
+        }
+        function watchPairGen(remoteId, unsubscribers) {
+            if (!roomId) return;
+            unsubscribers.push(onValue(pairGenRef(remoteId), (snap) => {
+                const g = snap.val();
+                if (g == null) return;
+                const seen = pairGenSeen.get(remoteId);
+                if (seen === undefined) { pairGenSeen.set(remoteId, g); return; }
+                if (g !== seen) {
+                    pairGenSeen.set(remoteId, g);
+                    hardRebuildPeer(remoteId, false);
+                }
+            }));
+        }
         async function rebuildPeer(remoteId, info = {}, useRelay = false) {
-            const entry = peers.get(remoteId);
-            if (entry?.rebuilding) return;
-            if (entry) entry.rebuilding = true;
+            if (rebuildingIds.has(remoteId)) return;
+            rebuildingIds.add(remoteId);
             setPeerWait(remoteId, true, "Reconnecting");
+            const entry = peers.get(remoteId);
             if (entry) {
                 entry.unsubscribers.forEach(fn => { try { fn(); } catch (_) {} });
                 try { entry.pc.close(); } catch (_) {}
                 peers.delete(remoteId);
             }
-            await clearPeerSignals(remoteId);
-            await ensurePeer(remoteId, myId < remoteId, useRelay, info);
-            const done = peers.get(remoteId);
-            if (done) done.rebuilding = false;
+            const useInfo = (info && Object.keys(info).length) ? info : (lastPeerInfo.get(remoteId) || {});
+            try {
+                await clearPeerSignals(remoteId);
+                await bumpPairGen(remoteId);
+            } finally {
+                rebuildingIds.delete(remoteId);
+            }
+            await ensurePeer(remoteId, myId < remoteId, useRelay, useInfo);
+        }
+        async function hardRebuildPeer(remoteId, useRelay = false) {
+            if (rebuildingIds.has(remoteId)) return;
+            if (!roomId || !myId) return;
+            rebuildingIds.add(remoteId);
+            setPeerWait(remoteId, true, "Reconnecting");
+            const entry = peers.get(remoteId);
+            if (entry) {
+                entry.unsubscribers.forEach(fn => { try { fn(); } catch (_) {} });
+                try { entry.pc.close(); } catch (_) {}
+                peers.delete(remoteId);
+            }
+            rebuildingIds.delete(remoteId);
+            const useInfo = lastPeerInfo.get(remoteId) || {};
+            await ensurePeer(remoteId, myId < remoteId, useRelay, useInfo);
         }
         function setPeerWait(id, on, text) {
             const tile = document.getElementById("tile-" + id);
@@ -1583,11 +1649,20 @@
             if (!roomId || !localStream) return;
             for (const [id, entry] of peers.entries()) {
                 const st = entry.pc?.connectionState;
-                if (st === "failed" || st === "disconnected") {
+                const ice = entry.pc?.iceConnectionState;
+                if (st === "failed" || ice === "failed") {
                     entry.bad = (entry.bad || 0) + 1;
                     setPeerWait(id, true, "Reconnecting");
-                    try { entry.pc.restartIce(); } catch (_) {}
-                    if (entry.bad >= 3) {
+                    if (entry.bad >= 2) {
+                        await rebuildPeer(id, {}, false);
+                    } else {
+                        try { await restartIceForPeer(id, entry); } catch (_) {}
+                    }
+                } else if (st === "disconnected" || ice === "disconnected") {
+                    entry.bad = (entry.bad || 0) + 1;
+                    setPeerWait(id, true, "Reconnecting");
+                    try { await restartIceForPeer(id, entry); } catch (_) {}
+                    if (entry.bad >= 6) {
                         await rebuildPeer(id, {}, false);
                     }
                 } else if (st === "closed") {
@@ -1601,22 +1676,62 @@
                     try {
                         const stats = await entry.pc.getStats();
                         let bytes = 0;
+                        let rtt = 0;
+                        let packetsLost = 0;
                         stats.forEach(r => {
                             if (r.type === "inbound-rtp" && (r.kind === "video" || r.mediaType === "video")) {
                                 bytes += r.bytesReceived || 0;
+                                packetsLost += r.packetsLost || 0;
+                            }
+                            if (r.type === "candidate-pair" && r.state === "succeeded" && r.currentRoundTripTime) {
+                                rtt = r.currentRoundTripTime;
                             }
                         });
-                        if (bytes === entry.lastBytes) entry.bad = (entry.bad || 0) + 1;
-                        else entry.bad = 0;
+                        if (bytes === entry.lastBytes && bytes > 0) entry.stall = (entry.stall || 0) + 1;
+                        else entry.stall = 0;
                         entry.lastBytes = bytes;
-                        if (entry.bad >= 4) {
+                        if (rtt > 0.45 || packetsLost > (entry.lastLost || 0) + 40) {
+                            try { await adaptBitrate(entry.pc, true); } catch (_) {}
+                        }
+                        entry.lastLost = packetsLost;
+                        if (entry.stall >= 8) {
                             setPeerWait(id, true, "Reconnecting");
-                            await rebuildPeer(id, {}, false);
-                        } else if (entry.bad === 0) {
+                            await restartIceForPeer(id, entry);
+                            entry.stall = 0;
+                            entry.bad = (entry.bad || 0) + 1;
+                            if (entry.bad >= 4) await rebuildPeer(id, {}, false);
+                        } else if (entry.stall === 0 && (st === "connected" || ice === "connected")) {
+                            entry.bad = 0;
                             setPeerWait(id, false);
                         }
                     } catch (_) {}
                 }
+            }
+        }
+        async function restartIceForPeer(remoteId, entry) {
+            const pc = entry?.pc;
+            if (!pc || !roomId) return;
+            try { pc.restartIce(); } catch (_) {}
+            if (myId < remoteId && pc.signalingState === "stable") {
+                try {
+                    const offer = await pc.createOffer({ iceRestart: true, offerToReceiveAudio: true, offerToReceiveVideo: true });
+                    await pc.setLocalDescription(offer);
+                    await set(ref(db, signalPath(myId, remoteId, "offer", !!entry.relayOnly)), { type: offer.type, sdp: offer.sdp, restart: true, t: Date.now() });
+                } catch (_) {}
+            }
+        }
+        async function adaptBitrate(pc, poor) {
+            const n = Math.max(1, peers.size);
+            const cap = poor ? 120000 : (onCellular() ? 180000 : (n >= 8 ? 250000 : 700000));
+            for (const s of pc.getSenders()) {
+                if (s.track?.kind !== "video") continue;
+                try {
+                    const params = s.getParameters();
+                    params.encodings = params.encodings?.length ? params.encodings : [{}];
+                    params.encodings[0].maxBitrate = cap;
+                    params.encodings[0].scaleResolutionDownBy = poor ? 2 : 1;
+                    await s.setParameters(params);
+                } catch (_) {}
             }
         }
         async function startMedia() {
@@ -1660,65 +1775,89 @@
             document.getElementById("copyBtn").textContent = "Copied";
             setTimeout(() => document.getElementById("copyBtn").textContent = "Copy", 1200);
         };
+        let mediaBusy = false;
         muteBtn.onclick = () => { micOn = !micOn; applyLocalMediaState(); };
         camBtn.onclick = async () => {
-            if (sharing) return;
+            if (sharing || mediaBusy) return;
             camOn = !camOn;
-            applyLocalMediaState();
             if (!camOn) {
-                cameraStream?.getVideoTracks?.().forEach(t => t.stop());
+                cameraStream?.getVideoTracks?.().forEach(t => { t.enabled = false; });
+                if (fxStream) fxStream.getVideoTracks().forEach(t => { t.enabled = false; });
                 if (roomId && myId) {
                     try { remove(ref(db, `rooms/${roomId}/previews/${myId}`)); } catch (_) {}
                 }
+                applyLocalMediaState();
+                return;
             }
-            if (camOn) {
-                try {
-                    if (fxStream) {
-                        fxStream.getTracks().forEach(t => t.stop());
-                        fxStream = null;
-                    }
-                    FX_W = 0;
-                    FX_H = 0;
+            mediaBusy = true;
+            try {
+                const live = cameraStream?.getVideoTracks?.().some(t => t.readyState === "live");
+                if (live) {
+                    cameraStream.getVideoTracks().forEach(t => { t.enabled = true; });
+                } else {
+                    resetFxOutput();
                     const oldCam = cameraStream;
-                    cameraStream = await getMedia(facing);
-                    if (oldCam && oldCam !== cameraStream) oldCam.getTracks().forEach(t => t.stop());
-                    fxSrc.srcObject = cameraStream;
-                    await fxSrc.play();
-                    await startFxPipeline();
-                    localVideo.srcObject = null;
-                    await pushLocalOutput();
-                    localTile.classList.remove("cam-off");
-                    await playVideo(localVideo);
-                } catch (err) {
-                    log("Camera failed");
-                    alert("Could not turn the camera back on.");
+                    const keepAudio = oldCam?.getAudioTracks?.().find(t => t.readyState === "live");
+                    cameraStream = await getMedia(facing, !!keepAudio);
+                    if (keepAudio && !cameraStream.getAudioTracks().length) cameraStream.addTrack(keepAudio);
+                    if (oldCam && oldCam !== cameraStream) {
+                        oldCam.getVideoTracks().forEach(t => t.stop());
+                        if (!keepAudio) oldCam.getAudioTracks().forEach(t => t.stop());
+                    }
                 }
+                if (fxMode !== "off") {
+                    await startFxPipeline();
+                } else {
+                    fxSrc.srcObject = cameraStream;
+                }
+                await pushLocalOutput();
+                localTile.classList.remove("cam-off");
+                await playVideo(localVideo);
+                applyLocalMediaState();
+            } catch (err) {
+                camOn = false;
+                applyLocalMediaState();
+                log("Camera failed");
+                alert("Could not turn the camera back on.");
+            } finally {
+                mediaBusy = false;
             }
-        };
-        fitBtn.onclick = () => {
-            fillMode = !fillMode;
-            storeSet(FIT_KEY, fillMode ? "1" : "0");
-            applyFitMode();
         };
         flipBtn.onclick = async () => {
-            if (sharing) return;
+            if (sharing || !camOn || mediaBusy) return;
             const nextFacing = facing === "user" ? "environment" : "user";
+            mediaBusy = true;
             flipBtn.disabled = true;
             try {
-                const next = await getMedia(nextFacing);
                 const old = cameraStream;
+                const keepAudio = old?.getAudioTracks?.().find(t => t.readyState === "live") || null;
+                const next = await getMedia(nextFacing, true);
+                if (keepAudio) {
+                    try { next.addTrack(keepAudio); } catch (_) {}
+                }
                 cameraStream = next;
-                localStream = next;
                 const settings = next.getVideoTracks()[0]?.getSettings?.() || {};
                 facing = settings.facingMode || nextFacing;
-                if (old && old !== next) old.getTracks().forEach(t => t.stop());
-                fxLastLm = null;
-                await startFxPipeline();
+                if (old && old !== next) old.getVideoTracks().forEach(t => t.stop());
+                resetFxOutput();
+                if (fxMode !== "off") await startFxPipeline();
+                else fxSrc.srcObject = cameraStream;
                 await pushLocalOutput();
-            } catch (e) { log("Flip failed"); }
-            flipBtn.disabled = sharing;
+                await playVideo(localVideo);
+                applyLocalMediaState();
+            } catch (e) {
+                log("Flip failed");
+            }
+            mediaBusy = false;
+            flipBtn.disabled = sharing || !camOn;
         };
         shareBtn.onclick = () => toggleShare();
+        document.getElementById("shareRotBtn").onclick = (e) => {
+            e.stopPropagation();
+            if (!sharing) return;
+            shareRot = (shareRot - 90) % 360;
+            applySharePreview();
+        };
         async function toggleShare() {
             if (sharing) {
                 await stopShare();
@@ -1740,24 +1879,19 @@
             const screenTrack = screenStream.getVideoTracks()[0];
             if (!screenTrack) return;
             sharing = true;
+            shareRot = isAppleTouch() ? -90 : 0;
             stopFxLoop();
             fxPanel.classList.remove("on");
             camOn = true;
-            const mixed = new MediaStream();
-            mixed.addTrack(screenTrack);
-            const mic = (cameraStream || localStream)?.getAudioTracks?.()[0];
-            if (mic) mixed.addTrack(mic);
-            localStream = mixed;
-            localVideo.srcObject = localStream;
-            await playVideo(localVideo);
+            await startShareDraw(screenStream);
             applyLocalMediaState();
             applyFitMode();
-            await replaceOutgoingVideo(screenTrack);
             screenTrack.onended = () => { stopShare(); };
         }
         async function stopShare() {
             if (!sharing) return;
             sharing = false;
+            stopShareDraw();
             if (screenStream) {
                 screenStream.getTracks().forEach(t => t.stop());
                 screenStream = null;
@@ -1779,8 +1913,92 @@
                 if (vt) await replaceOutgoingVideo(vt);
                 if (at) await replaceOutgoingAudio(at);
             }
+            clearSharePreviewStyles();
             applyLocalMediaState();
             applyFitMode();
+            layout();
+            await playVideo(localVideo);
+        }
+        function clearSharePreviewStyles() {
+            localTile.classList.remove("sharing");
+            localVideo.style.transform = "";
+            localVideo.style.width = "";
+            localVideo.style.height = "";
+            localVideo.style.left = "";
+            localVideo.style.top = "";
+            localVideo.style.right = "";
+            localVideo.style.bottom = "";
+            localTile.style.width = "";
+            localTile.style.height = "";
+            localTile.style.position = "";
+            localTile.style.right = "";
+            localTile.style.bottom = "";
+        }
+        function isAppleTouch() {
+            return /iP(hone|ad|od)/.test(navigator.userAgent) ||
+                (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+        }
+        function stopShareDraw() {
+            if (shareRaf) cancelAnimationFrame(shareRaf);
+            shareRaf = 0;
+            try { shareOutStream?.getTracks().forEach(t => t.stop()); } catch (_) {}
+            shareOutStream = null;
+            shareDrawSrc = null;
+        }
+        function drawShareFrame() {
+            if (!sharing || !shareDrawSrc) return;
+            const src = shareDrawSrc;
+            const vw = src.videoWidth || 0;
+            const vh = src.videoHeight || 0;
+            if (vw >= 2 && vh >= 2) {
+                const rot = ((shareRot % 360) + 360) % 360;
+                const swap = rot === 90 || rot === 270;
+                const cw = swap ? vh : vw;
+                const ch = swap ? vw : vh;
+                if (shareCanvas.width !== cw) shareCanvas.width = cw;
+                if (shareCanvas.height !== ch) shareCanvas.height = ch;
+                shareCtx.setTransform(1, 0, 0, 1, 0, 0);
+                shareCtx.clearRect(0, 0, cw, ch);
+                shareCtx.save();
+                shareCtx.translate(cw / 2, ch / 2);
+                shareCtx.rotate(rot * Math.PI / 180);
+                shareCtx.drawImage(src, -vw / 2, -vh / 2, vw, vh);
+                shareCtx.restore();
+            }
+            shareRaf = requestAnimationFrame(drawShareFrame);
+        }
+        async function startShareDraw(stream) {
+            stopShareDraw();
+            const src = document.createElement("video");
+            src.muted = true;
+            src.playsInline = true;
+            src.setAttribute("playsinline", "");
+            src.srcObject = stream;
+            shareDrawSrc = src;
+            try { await src.play(); } catch (_) {}
+            await waitVideoSize(src, 2000);
+            if (!isAppleTouch() && src.videoWidth && src.videoHeight) {
+                const vidLand = src.videoWidth >= src.videoHeight;
+                const winLand = window.innerWidth >= window.innerHeight;
+                if (vidLand !== winLand) shareRot = -90;
+            }
+            drawShareFrame();
+            shareOutStream = shareCanvas.captureStream(15);
+            const mixed = new MediaStream();
+            const vt = shareOutStream.getVideoTracks()[0];
+            if (vt) mixed.addTrack(vt);
+            const mic = (cameraStream || localStream)?.getAudioTracks?.()[0];
+            if (mic) mixed.addTrack(mic);
+            localStream = mixed;
+            localVideo.srcObject = mixed;
+            await playVideo(localVideo);
+            localTile.classList.add("sharing");
+            if (vt) await replaceOutgoingVideo(vt);
+        }
+        function applySharePreview() {
+            clearSharePreviewStyles();
+            if (!sharing) return;
+            localTile.classList.add("sharing");
         }
         async function confirmCellular() {
             if (!onCellular()) return true;
@@ -1795,6 +2013,138 @@
                 };
             });
         }
+        gearBtn.onclick = async () => {
+            const on = settingsPanel.classList.toggle("on");
+            if (on) await populateDevices();
+        };
+        document.addEventListener("click", (e) => {
+            if (settingsPanel.classList.contains("on") && !settingsPanel.contains(e.target) && e.target !== gearBtn) {
+                settingsPanel.classList.remove("on");
+            }
+        });
+        async function populateDevices() {
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const cams = devices.filter(d => d.kind === "videoinput");
+                const mics = devices.filter(d => d.kind === "audioinput");
+                const curCam = cameraStream?.getVideoTracks?.()[0]?.getSettings?.().deviceId;
+                const curMic = (cameraStream || localStream)?.getAudioTracks?.()[0]?.getSettings?.().deviceId;
+                camSelect.innerHTML = cams.map((d, i) =>
+                    `<option value="${d.deviceId}"${d.deviceId === curCam ? " selected" : ""}>${d.label || "Camera " + (i + 1)}</option>`
+                ).join("") || "<option>No cameras found</option>";
+                micSelect.innerHTML = mics.map((d, i) =>
+                    `<option value="${d.deviceId}"${d.deviceId === curMic ? " selected" : ""}>${d.label || "Microphone " + (i + 1)}</option>`
+                ).join("") || "<option>No microphones found</option>";
+            } catch (_) {}
+        }
+        camSelect.addEventListener("change", async () => {
+            if (sharing) return;
+            const id = camSelect.value;
+            if (!id) return;
+            try {
+                const old = cameraStream;
+                cameraStream = await navigator.mediaDevices.getUserMedia({
+                    video: { deviceId: { exact: id } },
+                    audio: false
+                });
+                const oldAudio = old?.getAudioTracks?.()[0];
+                if (oldAudio) cameraStream.addTrack(oldAudio);
+                if (old) old.getVideoTracks().forEach(t => t.stop());
+                fxSrc.srcObject = cameraStream;
+                await fxSrc.play();
+                await startFxPipeline();
+                await pushLocalOutput();
+            } catch (_) { log("Could not switch camera"); }
+        });
+        micSelect.addEventListener("change", async () => {
+            const id = micSelect.value;
+            if (!id) return;
+            try {
+                const audioStream = await navigator.mediaDevices.getUserMedia({
+                    audio: { deviceId: { exact: id }, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+                    video: false
+                });
+                const newTrack = audioStream.getAudioTracks()[0];
+                if (!newTrack) return;
+                const base = cameraStream || localStream;
+                base?.getAudioTracks?.().forEach(t => { t.stop(); base.removeTrack(t); });
+                base?.addTrack?.(newTrack);
+                newTrack.enabled = micOn;
+                if (sharing) await replaceOutgoingAudio(newTrack);
+                else await pushLocalOutput();
+            } catch (_) { log("Could not switch microphone"); }
+        });
+        function scrollChatToBottom() {
+            chatLog.scrollTop = chatLog.scrollHeight;
+        }
+        function addChatMessage(who, body, mine) {
+            const row = document.createElement("div");
+            row.className = "chat-msg";
+            const whoEl = document.createElement("span");
+            whoEl.className = "who";
+            whoEl.style.color = colorFor(who);
+            whoEl.textContent = (mine ? "You" : who) + ":";
+            const bodyEl = document.createElement("span");
+            bodyEl.className = "body";
+            bodyEl.textContent = body;
+            row.append(whoEl, bodyEl);
+            chatLog.appendChild(row);
+            scrollChatToBottom();
+        }
+        function setChatUnread(n) {
+            unreadChat = n;
+            chatDot.classList.toggle("on", unreadChat > 0 && !chatOpen);
+        }
+        chatBtn.onclick = () => {
+            chatOpen = chatPanel.classList.toggle("on");
+            chatBtn.classList.toggle("on", chatOpen);
+            if (chatOpen) {
+                setChatUnread(0);
+                setTimeout(() => chatInput.focus(), 50);
+            }
+        };
+        chatForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const text = chatInput.value.trim();
+            if (!text || !roomId) return;
+            chatInput.value = "";
+            try {
+                await push(ref(db, `rooms/${roomId}/chat`), {
+                    name: displayName, text, t: Date.now()
+                });
+            } catch (_) {}
+        });
+        function watchChat() {
+            if (chatUnsub) { try { chatUnsub(); } catch (_) {} chatUnsub = null; }
+            chatLog.innerHTML = "";
+            setChatUnread(0);
+            if (!roomId) return;
+            let first = true;
+            chatUnsub = onChildAdded(ref(db, `rooms/${roomId}/chat`), (snap) => {
+                const msg = snap.val() || {};
+                addChatMessage(msg.name || "?", msg.text || "", msg.name === displayName);
+                if (!first && msg.name !== displayName) setChatUnread(unreadChat + 1);
+            });
+            setTimeout(() => { first = false; }, 800);
+        }
+        fsBtn.onclick = () => {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen?.().catch(() => {});
+            } else {
+                document.exitFullscreen?.().catch(() => {});
+            }
+        };
+        document.addEventListener("fullscreenchange", () => {
+            fsBtn.classList.toggle("on", !!document.fullscreenElement);
+        });
+        document.addEventListener("keydown", (e) => {
+            if (!document.body.classList.contains("in-call")) return;
+            const tag = document.activeElement?.tagName;
+            if (tag === "INPUT" || tag === "TEXTAREA") return;
+            if (e.key === "m" || e.key === "M") muteBtn.click();
+            else if (e.key === "v" || e.key === "V") camBtn.click();
+            else if (e.key === "f" || e.key === "F") fsBtn.click();
+        });
         document.getElementById("hangup").onclick = () => leaveRoom(true);
         async function enter() {
             displayName = cleanUsername(nameInput.value);
@@ -1817,7 +2167,6 @@
                 alert("Camera or mic blocked. On iPhone use HTTPS and allow Camera and Mic.");
                 return;
             }
-            try { await detectNetHash(); } catch (_) {}
             await joinRoom(id);
         }
         function setInCall(on) {
@@ -1844,8 +2193,8 @@
             setInCall(true);
             roomChip.classList.add("on");
             roomLabel.textContent = roomId;
-            refreshNetBadge();
             log("In room " + roomId);
+            watchChat();
             const meRef = ref(db, `rooms/${roomId}/participants/${myId}`);
             try { await onDisconnect(ref(db, `rooms/${roomId}/previews/${myId}`)).remove(); } catch (_) {}
             await publishState();
@@ -1897,20 +2246,15 @@
                         return;
                     }
                     updateRemoteChrome(child.key, info);
-                    const g = info.gen || 0;
-                    if (peerGen.has(child.key) && peerGen.get(child.key) !== g) {
-                        peerGen.set(child.key, g);
-                        rebuildPeer(child.key, info, false);
-                    } else {
-                        peerGen.set(child.key, g);
-                        ensurePeer(child.key, myId < child.key, false, info);
-                    }
+                    lastPeerInfo.set(child.key, info);
+                    ensurePeer(child.key, myId < child.key, false, info);
                 });
             });
             stopPresenceTimers();
             heartbeatTimer = setInterval(() => { publishState(); }, 8000);
             pruneTimer = setInterval(() => { pruneStaleParticipants(); }, 10000);
-            reconnectTimer = setInterval(() => { recoverPeers(); }, 5000);
+            reconnectTimer = setInterval(() => { recoverPeers(); }, 4000);
+            previewTimer = setInterval(() => { publishPreviewFrame(); }, 4000);
             if (previewUnsub) { try { previewUnsub(); } catch (_) {} }
             previewUnsub = onValue(ref(db, `rooms/${roomId}/previews`), snap => {
                 if (!snap.exists()) return;
@@ -1967,9 +2311,6 @@
             tile.classList.toggle("sharing", !!info.sharing);
             tile.classList.toggle("front-cam", info.front !== false && !info.sharing);
             tile.classList.toggle("back-cam", info.front === false);
-            const sameNet = !!(info.net && myNetHash && info.net === myNetHash);
-            tile.classList.toggle("same-net", sameNet);
-            tile.classList.toggle("school-peer", !!info.school);
             if (info.camOn === false) {
                 tile.classList.remove("waiting");
                 const snap = tile.querySelector(".tile-snap");
@@ -1977,7 +2318,6 @@
             }
             paintAva(tile.querySelector(".cam-off-badge .ava"), n);
             applyFitMode();
-            refreshNetBadge();
         }
         function attachLocalTracks(pc) {
             const stream = localStream || cameraStream;
@@ -2012,6 +2352,7 @@
         }
         async function ensurePeer(remoteId, iAmOfferer, relayOnly = false, info = {}) {
             if (!roomId) return;
+            if (rebuildingIds.has(remoteId)) return;
             const existing = peers.get(remoteId);
             if (existing) {
                 const st = existing.pc.connectionState;
@@ -2033,6 +2374,8 @@
             const unsubscribers = [];
             const remoteStream = new MediaStream();
             peers.set(remoteId, { pc, unsubscribers, remoteStream, muted: false, relayOnly, lastBytes: 0, lastStats: 0 });
+            if (info && Object.keys(info).length) lastPeerInfo.set(remoteId, info);
+            watchPairGen(remoteId, unsubscribers);
             attachLocalTracks(pc);
             let tile = document.getElementById("tile-" + remoteId);
             let v = tile?.querySelector("video");
@@ -2070,15 +2413,13 @@
             dot.className = "micdot";
             const nameEl = document.createElement("span");
             nameEl.setAttribute("data-name", "");
-            const netTag = document.createElement("span");
-            netTag.className = "net-tag";
             nameEl.textContent = info.name || remoteId.slice(0, 6);
-            label.append(dot, nameEl, netTag);
+            label.append(dot, nameEl);
             const btns = document.createElement("div");
             btns.className = "tile-btns";
             const muteThem = document.createElement("button");
             muteThem.type = "button";
-            muteThem.textContent = "Mute";
+            muteThem.innerHTML = ICO_MUTE_THEM;
             muteThem.title = "Mute this person for you";
             muteThem.onclick = () => {
                 const p = peers.get(remoteId);
@@ -2086,7 +2427,8 @@
                 p.muted = !p.muted;
                 p.remoteStream.getAudioTracks().forEach(t => t.enabled = !p.muted);
                 muteThem.classList.toggle("on", p.muted);
-                muteThem.textContent = p.muted ? "Hear" : "Mute";
+                muteThem.innerHTML = p.muted ? ICO_HEAR : ICO_MUTE_THEM;
+                muteThem.title = p.muted ? "Unmute this person" : "Mute this person for you";
             };
             btns.appendChild(muteThem);
             tile.append(v, snapImg, waitEl, sharePill, badge, label, btns);
@@ -2127,51 +2469,83 @@
                 if (pc.connectionState === "connected") setPeerWait(remoteId, false);
                 if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
                     setPeerWait(remoteId, true, "Reconnecting");
-                    try { pc.restartIce(); } catch (_) {}
+                    const entry = peers.get(remoteId);
+                    restartIceForPeer(remoteId, entry || { pc, relayOnly }).catch(() => {});
+                    const delay = pc.connectionState === "failed" ? 6000 : 12000;
                     setTimeout(() => {
                         const cur = peers.get(remoteId);
                         if (!cur || cur.pc !== pc) return;
-                        if (pc.connectionState === "connected") return;
-                        rebuildPeer(remoteId, info, true);
-                    }, 3000);
+                        if (pc.connectionState === "connected" || pc.iceConnectionState === "connected") return;
+                        rebuildPeer(remoteId, info, false);
+                    }, delay);
+                }
+            };
+            pc.oniceconnectionstatechange = () => {
+                if (pc.iceConnectionState === "connected" || pc.iceConnectionState === "completed") {
+                    setPeerWait(remoteId, false);
                 }
             };
             if (!relayOnly) {
-                const wait = sameLan(info) ? 5000 : (onCellular() ? 3500 : 8000);
+                const wait = onCellular() ? 10000 : 16000;
                 setTimeout(async () => {
                     const entry = peers.get(remoteId);
                     if (!entry || entry.pc !== pc) return;
-                    if (pc.connectionState === "connected" || pc.iceConnectionState === "connected") return;
+                    if (pc.connectionState === "connected" || pc.iceConnectionState === "connected" || pc.iceConnectionState === "completed") return;
                     if (remoteStream.getTracks().length) return;
-                    teardownPeer(remoteId);
-                    await ensurePeer(remoteId, iAmOfferer, true, info);
+                    await rebuildPeer(remoteId, info, true);
                 }, wait);
+            }
+            const pendingCandidates = [];
+            async function flushPendingCandidates() {
+                while (pendingCandidates.length) {
+                    const c = pendingCandidates.shift();
+                    try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch (_) {}
+                }
             }
             const candRef = ref(db, signalPath(myId, remoteId, "candidates/" + myId, relayOnly));
             pc.onicecandidate = (ev) => { if (ev.candidate) push(candRef, ev.candidate.toJSON()); };
             unsubscribers.push(onChildAdded(ref(db, signalPath(myId, remoteId, "candidates/" + remoteId, relayOnly)), (snap) => {
-                if (snap.val()) pc.addIceCandidate(new RTCIceCandidate(snap.val())).catch(() => {});
+                const val = snap.val();
+                if (!val) return;
+                if (pc.remoteDescription) {
+                    pc.addIceCandidate(new RTCIceCandidate(val)).catch(() => {});
+                } else {
+                    pendingCandidates.push(val);
+                }
             }));
             const offerRef = ref(db, signalPath(myId, remoteId, "offer", relayOnly));
             const answerRef = ref(db, signalPath(myId, remoteId, "answer", relayOnly));
             if (iAmOfferer) {
                 const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
                 await pc.setLocalDescription(offer);
-                await set(offerRef, { type: offer.type, sdp: offer.sdp });
+                await set(offerRef, { type: offer.type, sdp: offer.sdp, t: Date.now() });
                 unsubscribers.push(onValue(answerRef, async (snap) => {
                     const data = snap.val();
-                    if (data && !pc.currentRemoteDescription) {
-                        await pc.setRemoteDescription(new RTCSessionDescription(data));
-                    }
+                    if (!data || !data.sdp) return;
+                    try {
+                        if (pc.signalingState === "have-local-offer" || !pc.currentRemoteDescription) {
+                            await pc.setRemoteDescription(new RTCSessionDescription({ type: data.type, sdp: data.sdp }));
+                            await flushPendingCandidates();
+                        }
+                    } catch (_) {}
                 }));
             } else {
+                let lastOfferSdp = "";
                 unsubscribers.push(onValue(offerRef, async (snap) => {
                     const data = snap.val();
-                    if (!data || pc.currentRemoteDescription) return;
-                    await pc.setRemoteDescription(new RTCSessionDescription(data));
-                    const answer = await pc.createAnswer();
-                    await pc.setLocalDescription(answer);
-                    await set(answerRef, { type: answer.type, sdp: answer.sdp });
+                    if (!data || !data.sdp) return;
+                    if (data.sdp === lastOfferSdp) return;
+                    lastOfferSdp = data.sdp;
+                    try {
+                        if (pc.signalingState === "have-local-offer") {
+                            try { await pc.setLocalDescription({ type: "rollback" }); } catch (_) {}
+                        }
+                        await pc.setRemoteDescription(new RTCSessionDescription({ type: data.type, sdp: data.sdp }));
+                        await flushPendingCandidates();
+                        const answer = await pc.createAnswer();
+                        await pc.setLocalDescription(answer);
+                        await set(answerRef, { type: answer.type, sdp: answer.sdp, t: Date.now() });
+                    } catch (_) {}
                 }));
             }
         }
@@ -2214,6 +2588,12 @@
             if (removedUnsub) { try { removedUnsub(); } catch (_) {} removedUnsub = null; }
             if (partsValueUnsub) { try { partsValueUnsub(); } catch (_) {} partsValueUnsub = null; }
             if (previewUnsub) { try { previewUnsub(); } catch (_) {} previewUnsub = null; }
+            if (chatUnsub) { try { chatUnsub(); } catch (_) {} chatUnsub = null; }
+            chatLog.innerHTML = "";
+            chatPanel.classList.remove("on");
+            chatOpen = false;
+            setChatUnread(0);
+            settingsPanel.classList.remove("on");
             [...peers.keys()].forEach(teardownPeer);
             const leavingRoomId = roomId;
             const leavingUserId = myId;
